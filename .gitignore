@@ -1,0 +1,87 @@
+# =================================================
+# Damopool repository
+# Tracks only Damopool analytics, backend, frontend,
+# tests and project documentation.
+#
+# CKPool source, runtime data and configuration stay
+# local and are not included in this repository.
+# =================================================
+
+# Ignore everything in this CKPool working directory
+/*
+
+# Keep this Git configuration file
+!/.gitignore
+
+# Damopool project documentation
+!/CLAUDE.md
+!/ROADMAP.md
+!/PROJECT_LOG.md
+!/README-DAMOPOOL.md
+
+# Current Damopool analytics code
+!/parse_share_analytics.py
+!/pool_statistics.py
+
+# Future Damopool application directories
+!/backend/
+!/backend/**
+!/frontend/
+!/frontend/**
+!/analytics/
+!/analytics/**
+!/tests/
+!/tests/**
+!/docs/
+!/docs/**
+!/scripts-damopool/
+!/scripts-damopool/**
+
+# Python dependency and project files
+!/requirements.txt
+!/requirements-dev.txt
+!/pyproject.toml
+!/pytest.ini
+
+# Environment templates may be committed
+!/.env.example
+
+# Never commit real secrets or local environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret
+secrets.json
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Damopool-generated runtime data
+analytics.json
+analytics_history.json
+*.state.json
+*.cursor.json
+*.pid
+*.lock
+*.tmp
+
+# Editor and operating-system files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+EOF
