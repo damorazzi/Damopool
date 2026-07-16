@@ -25,6 +25,7 @@
 !/pool_statistics.py
 !/user_statistics.py
 !/worker_statistics.py
+!/analytics_builder.py
 
 # Damopool project agent definitions
 !/.claude/
