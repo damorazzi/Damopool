@@ -6,7 +6,7 @@ Feature 001 - Sharelog Reader
 Status: Completed
 
 Feature 002 - Pool Statistics
-Status: Design Completed
+Status: Completed
 
 Feature 003 - User Statistics
 Status: Planned

@@ -1,5 +1,18 @@
 # Project Log
 
+## 2026-07-16
+
+- Implemented Feature 002 - Pool Statistics per the approved design.
+- parse_share_analytics.py modified to stop discarding result=false records and to yield the result field.
+- pool_statistics.py created, consuming parse_share_analytics.py's reader; computes accepted/rejected/invalid-result counts, average/median/min/max sdiff, p50/p90/p99 percentiles, best share today, and best share ever.
+- Independent test-engineer pass (round 1, 62 tests) found three Blocking crash bugs: non-object JSON lines (bare scalar/null/list) crashing record.get() with AttributeError; invalid UTF-8 bytes in a sharelog line crashing text-mode file iteration with UnicodeDecodeError; unbounded createdate seconds crashing datetime.fromtimestamp() with OSError.
+- Fixed all three: parse_share_analytics.py now reads sharelog files in binary mode and decodes each line individually, skipping and logging only the one bad line instead of losing the whole file; added an isinstance(record, dict) guard to skip non-object JSON lines; pool_statistics.py's parse_createdate now rejects seconds above MAX_TIMESTAMP_SECONDS (253,402,300,799 / 9999-12-31T23:59:59 UTC).
+- Independent test-engineer pass (round 2, 73 tests) confirmed all three Blocking fixes with no regressions, including stress tests for the encoding fix (interspersed bad lines, bad byte at start/middle/end of line, truncated multi-byte sequence at EOF).
+- Independent code-reviewer pass found no Blocking or Major issues; confirmed no references to parse_pool_stats.py, pool_stats.json, or historical_data.json anywhere in the change, and confirmed the implementation matches every design decision recorded above.
+- Noted Minor items carried forward, not blocking: _BestTracker tie-break is asymmetric when the existing best has no timestamp; accepted_count can exceed the sdiff sample count backing average/median/percentiles; best_share_ever is scoped only to currently-present .sharelog files pending the persisted-cursor architecture required before Feature 006; clientid and hash are not yet extracted by parse_share_analytics.py, needed ahead of Feature 004; no --logs-dir CLI override yet for manual testing against sample data.
+- Committed the regression test suite (73 tests) to tests/test_analytics.py and tests/test_encoding.py; suite uses only synthetic tempfile-based fixture data, never touches the production logs directory, and passes from the project directory via `python3 -m unittest discover -s tests`.
+- Feature 002 - Pool Statistics marked Completed in ROADMAP.md.
+
 ## 2026-07-15
 
 - Created CLAUDE.md

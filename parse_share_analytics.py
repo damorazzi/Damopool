@@ -17,14 +17,19 @@ def find_sharelog_files(logs_dir):
 
 def parse_sharelog_file(path):
     try:
-        f = open(path, "r", encoding="utf-8")
+        f = open(path, "rb")
     except OSError as exc:
         print(f"warning: could not open {path}: {exc}", file=sys.stderr)
         return
 
     try:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            try:
+                line = raw_line.decode("utf-8").strip()
+            except UnicodeDecodeError as exc:
+                print(f"warning: skipping undecodable line in {path}: {exc}", file=sys.stderr)
+                continue
+
             if not line:
                 continue
             try:
@@ -32,7 +37,7 @@ def parse_sharelog_file(path):
             except json.JSONDecodeError:
                 continue
 
-            if not record.get("result", False):
+            if not isinstance(record, dict):
                 continue
 
             yield {
@@ -41,6 +46,7 @@ def parse_sharelog_file(path):
                 "agent": record.get("agent"),
                 "diff": record.get("diff"),
                 "sdiff": record.get("sdiff"),
+                "result": record.get("result"),
                 "createdate": record.get("createdate"),
             }
     except OSError as exc:
@@ -61,6 +67,7 @@ def print_share(share):
     print("Miner:", share["agent"])
     print("Assigned Difficulty:", share["diff"])
     print("Actual Difficulty:", share["sdiff"])
+    print("Result:", share["result"])
     print("Timestamp:", share["createdate"])
     print()
 
