@@ -18,7 +18,7 @@ Feature 005 - analytics.json
 Status: Completed
 
 Feature 006 - Website Integration
-Status: Planned
+Status: Completed
 
 Feature 007 - Daily Best Ticker
 Status: Planned

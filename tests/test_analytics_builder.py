@@ -45,6 +45,10 @@ def cd(epoch_seconds, nanos=0):
 class TempLogDirMixin:
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="damopool_abtest_")
+        # Isolated per-test incremental state path -- build_analytics()
+        # defaults to the real analytics.state.json, which must never be
+        # touched by tests (mirrors the existing logs_dir isolation).
+        self.state_path = os.path.join(self.tmpdir, "analytics.state.json")
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
@@ -108,7 +112,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(createdate=cd(edge_epoch), result=True, sdiff=2.0)
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertEqual(data["pool"]["rolling_windows"]["15m"]["accepted"], 1,
                           "share exactly at the 15m window edge must be included (inclusive boundary)")
 
@@ -119,7 +123,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(createdate=cd(past_edge_epoch), result=True, sdiff=2.0)
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertEqual(data["pool"]["rolling_windows"]["15m"]["accepted"], 0)
 
     def test_share_exactly_at_now_included(self):
@@ -127,7 +131,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(createdate=cd(int(now.timestamp())), result=True, sdiff=2.0)
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertEqual(data["pool"]["rolling_windows"]["15m"]["accepted"], 1)
 
     def test_share_in_future_excluded(self):
@@ -136,7 +140,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(createdate=cd(future_epoch), result=True, sdiff=2.0)
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         for w in ("15m", "1h", "24h"):
             self.assertEqual(data["pool"]["rolling_windows"][w]["accepted"], 0,
                               f"future share must be excluded from {w} window")
@@ -147,7 +151,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
             make_share(createdate=cd(int(now.timestamp())), result="notabool", sdiff=2.0),
             make_share(createdate=cd(int(now.timestamp())), result=None, sdiff=2.0),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         for w in ("15m", "1h", "24h"):
             win = data["pool"]["rolling_windows"][w]
             self.assertEqual(win["accepted"], 0)
@@ -160,7 +164,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(createdate=cd(int(now.timestamp())), result=False, sdiff=2.0),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         win = data["pool"]["rolling_windows"]["15m"]
         self.assertEqual(win["rejected"], 1)
         self.assertIsNone(win["average_sdiff"])
@@ -180,7 +184,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
             # both valid
             make_share(username="bob", workername="rig2", createdate=ts, result=True, sdiff=3.0),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertEqual(data["pool"]["rolling_windows"]["15m"]["accepted"], 3)
         # alice has a window entry (valid username), rig1 is not a user so no user entry
         self.assertIn("alice", data["users"])
@@ -203,7 +207,7 @@ class TestRollingWindows(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username="carol", workername="rig3", createdate=cd(old_epoch), result=True, sdiff=5.0),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         u = data["users"]["carol"]["rolling_windows"]
         self.assertEqual(u["15m"]["accepted"], 0)
         self.assertEqual(u["15m"]["average_sdiff"], None)
@@ -220,21 +224,21 @@ class TestUserWorkersField(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username="alice", workername="rig1"),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertEqual(data["users"]["alice"]["workers"], ["rig1"])
 
     def test_invalid_username_excludes_pairing(self):
         self.write_share_lines("a.sharelog", [
             make_share(username=None, workername="rig1"),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertEqual(data["users"], {})
 
     def test_invalid_workername_excludes_pairing_but_user_entry_exists(self):
         self.write_share_lines("a.sharelog", [
             make_share(username="alice", workername=None),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertIn("alice", data["users"])
         self.assertEqual(data["users"]["alice"]["workers"], [])
 
@@ -242,7 +246,7 @@ class TestUserWorkersField(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username=" alice ", workername=" rig1 "),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertIn(" alice ", data["users"])
         self.assertEqual(data["users"][" alice "]["workers"], [" rig1 "])
         self.assertNotIn("alice", data["users"])
@@ -254,7 +258,7 @@ class TestUserWorkersField(TempLogDirMixin, unittest.TestCase):
             make_share(username="alice", workername="rigA"),
             make_share(username="alice", workername="rigM"),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertEqual(data["users"]["alice"]["workers"], ["rigA", "rigM", "rigZ"])
 
     def test_populated_regardless_of_result_validity(self):
@@ -262,7 +266,7 @@ class TestUserWorkersField(TempLogDirMixin, unittest.TestCase):
             make_share(username="alice", workername="rig1", result=False),
             make_share(username="alice", workername="rig2", result="bad"),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertEqual(data["users"]["alice"]["workers"], ["rig1", "rig2"])
 
 
@@ -276,7 +280,7 @@ class TestPoolStartDate(TempLogDirMixin, unittest.TestCase):
             make_share(createdate=cd(1_700_000_100), result=False),
             make_share(createdate=cd(1_700_000_000), result="garbage"),  # invalid-result, earliest
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         expected = datetime.fromtimestamp(1_700_000_000, tz=timezone.utc).date().isoformat()
         self.assertEqual(data["metadata"]["pool_start_date"], expected)
 
@@ -286,7 +290,7 @@ class TestPoolStartDate(TempLogDirMixin, unittest.TestCase):
             make_share(createdate=None),
             make_share(createdate="99999999999999999999,0"),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertIsNone(data["metadata"]["pool_start_date"])
 
     def test_malformed_createdate_mixed_with_valid_not_selected(self):
@@ -295,7 +299,7 @@ class TestPoolStartDate(TempLogDirMixin, unittest.TestCase):
             make_share(createdate="not-a-createdate"),  # malformed, must not crash/win
             make_share(createdate=cd(-5)),  # out of range (negative seconds)
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         expected = datetime.fromtimestamp(1_700_000_500, tz=timezone.utc).date().isoformat()
         self.assertEqual(data["metadata"]["pool_start_date"], expected)
 
@@ -303,7 +307,7 @@ class TestPoolStartDate(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(createdate=cd(1_700_000_000), result=None),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         expected = datetime.fromtimestamp(1_700_000_000, tz=timezone.utc).date().isoformat()
         self.assertEqual(data["metadata"]["pool_start_date"], expected)
 
@@ -325,7 +329,7 @@ class TestCounts(TempLogDirMixin, unittest.TestCase):
         with open(path, "ab") as f:
             f.write(b"\xff\xfe not valid utf8\n")
 
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertEqual(data["metadata"]["share_records_processed"], 5)
         self.assertEqual(data["metadata"]["source_files_scanned"], 1)
 
@@ -336,13 +340,13 @@ class TestCounts(TempLogDirMixin, unittest.TestCase):
             make_share(result="neither"),
             make_share(result=None),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertEqual(data["metadata"]["share_records_processed"], 4)
 
     def test_multiple_files_scanned(self):
         self.write_share_lines("a.sharelog", [make_share()])
         self.write_share_lines("b.sharelog", [make_share(), make_share()])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc))
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=datetime(2026, 7, 16, tzinfo=timezone.utc), state_path=self.state_path)
         self.assertEqual(data["metadata"]["source_files_scanned"], 2)
         self.assertEqual(data["metadata"]["share_records_processed"], 3)
 
@@ -358,7 +362,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
         later_low = make_share(username="alice", sdiff=2.0, createdate=cd(today_midnight + 3600))
         earlier_high = make_share(username="alice", sdiff=10.0, createdate=cd(today_midnight + 1800))
         self.write_share_lines("a.sharelog", [later_low, earlier_high])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         today_key = "2026-07-16"
         entry = data["daily_bests"][today_key]["users"]["alice"]
         # Chronologically: earlier_high (sdiff=10) happens first -> becomes current.
@@ -373,7 +377,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
         high_later = make_share(username="alice", sdiff=10.0, createdate=cd(today_midnight + 3600))
         low_earlier = make_share(username="alice", sdiff=2.0, createdate=cd(today_midnight + 1800))
         self.write_share_lines("a.sharelog", [high_later, low_earlier])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         entry = data["daily_bests"]["2026-07-16"]["users"]["alice"]
         # Chronologically: low_earlier (sdiff=2) first -> current=2.
         # Then high_later (sdiff=10) supersedes -> current=10, previous=2.
@@ -391,7 +395,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
             make_share(username="alice", sdiff=50.0, createdate=cd(base + 300)),
         ]
         self.write_share_lines("a.sharelog", shares)
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         entry = data["daily_bests"]["2026-07-16"]["users"]["alice"]
         self.assertEqual(entry["current_daily_best"]["sdiff"], 50.0)
         self.assertEqual(entry["previous_daily_best"]["sdiff"], 5.0,
@@ -405,7 +409,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
             make_share(username="alice", sdiff=7.0, createdate=cd(base + 200)),
         ]
         self.write_share_lines("a.sharelog", shares)
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         entry = data["daily_bests"]["2026-07-16"]["users"]["alice"]
         self.assertEqual(entry["current_daily_best"]["sdiff"], 7.0)
         # Sensible / documented behavior: tie does not "overtake", so previous stays None.
@@ -421,7 +425,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
         for i, bad in enumerate(bad_sdiffs):
             shares.append(make_share(username="alice", sdiff=bad, createdate=cd(base + i), result=True))
         self.write_share_lines("a.sharelog", shares)
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         entry = data["daily_bests"]["2026-07-16"]["users"].get("alice")
         self.assertIsNone(entry, "no valid-sdiff candidates should mean alice has no daily_bests entry at all")
 
@@ -431,7 +435,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username="alice", sdiff=3.0, createdate=cd(base + 100)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         entry = data["daily_bests"]["2026-07-16"]["users"]["alice"]
         self.assertIsNone(entry["previous_daily_best"])
         self.assertIsNone(entry["improvement_amount"])
@@ -440,14 +444,14 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
     def test_today_key_always_present_even_when_empty(self):
         now = datetime(2026, 7, 16, 20, 0, 0, tzinfo=timezone.utc)
         self.write_share_lines("a.sharelog", [])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertIn("2026-07-16", data["daily_bests"])
         self.assertEqual(data["daily_bests"]["2026-07-16"], {"users": {}})
 
     def test_yesterday_key_absent_when_no_qualifying_data(self):
         now = datetime(2026, 7, 16, 20, 0, 0, tzinfo=timezone.utc)
         self.write_share_lines("a.sharelog", [])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertNotIn("2026-07-15", data["daily_bests"])
 
     def test_yesterday_key_present_when_qualifying_data_exists(self):
@@ -456,7 +460,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username="alice", sdiff=4.0, createdate=cd(yesterday_ts)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertIn("2026-07-15", data["daily_bests"])
         self.assertEqual(data["daily_bests"]["2026-07-15"]["users"]["alice"]["current_daily_best"]["sdiff"], 4.0)
 
@@ -466,7 +470,7 @@ class TestDailyBests(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username="alice", sdiff=4.0, createdate=cd(old_ts)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertNotIn("2026-07-10", data["daily_bests"])
         self.assertEqual(len(data["daily_bests"]), 1)  # only today
         # but it should still show up in pool-wide stats
@@ -486,7 +490,7 @@ class TestLiveTicker(TempLogDirMixin, unittest.TestCase):
             make_share(username="bob", workername="w2", sdiff=3.0, createdate=cd(base + 5000)),
             make_share(username="carol", workername="w3", sdiff=3.0, createdate=cd(base + 2000)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         usernames = [e["username"] for e in data["live_ticker"]]
         self.assertEqual(usernames, ["bob", "carol", "alice"])
 
@@ -496,7 +500,7 @@ class TestLiveTicker(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username="alice", sdiff=4.0, createdate=cd(yesterday_ts)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         self.assertEqual(data["live_ticker"], [])
 
     def test_field_shape(self):
@@ -506,7 +510,7 @@ class TestLiveTicker(TempLogDirMixin, unittest.TestCase):
             make_share(username="alice", workername="w1", sdiff=2.0, createdate=cd(base + 100)),
             make_share(username="alice", workername="w2", sdiff=9.0, createdate=cd(base + 200)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         entry = data["live_ticker"][0]
         self.assertEqual(set(entry.keys()), {
             "username", "workername", "current_daily_best", "previous_daily_best",
@@ -591,7 +595,7 @@ class TestEndToEnd(TempLogDirMixin, unittest.TestCase):
             make_share(username="dave", workername="dave.rig1", sdiff=9.0, createdate=cd(today_base + 300), result=True),
         ])
 
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
 
         # Well-formed / JSON-serializable
         serialized = json.dumps(data)
@@ -635,7 +639,7 @@ class TestEndToEnd(TempLogDirMixin, unittest.TestCase):
 class TestAdditionalEdgeCases(TempLogDirMixin, unittest.TestCase):
     def test_completely_empty_logs_dir_no_crash_and_well_formed(self):
         now = datetime(2026, 7, 16, 12, 0, 0, tzinfo=timezone.utc)
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         json.dumps(data)  # must be serializable
         self.assertEqual(data["metadata"]["share_records_processed"], 0)
         self.assertEqual(data["metadata"]["source_files_scanned"], 0)
@@ -654,7 +658,7 @@ class TestAdditionalEdgeCases(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [make_share(createdate=cd(1_700_000_000))])
         naive_now = datetime(2026, 7, 16, 12, 0, 0)  # no tzinfo
         with self.assertRaises(TypeError):
-            ab.build_analytics(logs_dir=self.tmpdir, now=naive_now)
+            ab.build_analytics(logs_dir=self.tmpdir, now=naive_now, state_path=self.state_path)
 
     def test_daily_best_candidacy_does_not_require_valid_workername(self):
         """Per the 2026-07-16 spec, daily-best candidacy only requires
@@ -666,7 +670,7 @@ class TestAdditionalEdgeCases(TempLogDirMixin, unittest.TestCase):
         self.write_share_lines("a.sharelog", [
             make_share(username="alice", workername=None, sdiff=9.0, createdate=cd(base + 100)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         entry = data["daily_bests"]["2026-07-16"]["users"]["alice"]
         self.assertIsNone(entry["current_daily_best"]["workername"])
         self.assertIsNone(data["live_ticker"][0]["workername"])
@@ -684,7 +688,7 @@ class TestAdditionalEdgeCases(TempLogDirMixin, unittest.TestCase):
             make_share(username="alice", workername="w1", sdiff=9.0, createdate=cd(base + 100, 900_000_000)),
             make_share(username="bob", workername="w2", sdiff=9.0, createdate=cd(base + 100, 100_000_000)),
         ])
-        data = ab.build_analytics(logs_dir=self.tmpdir, now=now)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         timestamps = {e["username"]: e["timestamp"] for e in data["live_ticker"]}
         # Both collapse to the same second-resolution ISO timestamp.
         self.assertEqual(timestamps["alice"], timestamps["bob"])
