@@ -12,7 +12,7 @@ Feature 003 - User Statistics
 Status: Completed
 
 Feature 004 - Worker Statistics
-Status: Planned
+Status: Completed
 
 Feature 005 - analytics.json
 Status: Design Completed
