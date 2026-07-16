@@ -9,7 +9,7 @@ Feature 002 - Pool Statistics
 Status: Completed
 
 Feature 003 - User Statistics
-Status: Planned
+Status: Completed
 
 Feature 004 - Worker Statistics
 Status: Planned

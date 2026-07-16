@@ -12,6 +12,22 @@
 - Noted Minor items carried forward, not blocking: _BestTracker tie-break is asymmetric when the existing best has no timestamp; accepted_count can exceed the sdiff sample count backing average/median/percentiles; best_share_ever is scoped only to currently-present .sharelog files pending the persisted-cursor architecture required before Feature 006; clientid and hash are not yet extracted by parse_share_analytics.py, needed ahead of Feature 004; no --logs-dir CLI override yet for manual testing against sample data.
 - Committed the regression test suite (73 tests) to tests/test_analytics.py and tests/test_encoding.py; suite uses only synthetic tempfile-based fixture data, never touches the production logs directory, and passes from the project directory via `python3 -m unittest discover -s tests`.
 - Feature 002 - Pool Statistics marked Completed in ROADMAP.md.
+- Designed Feature 003 - User Statistics, design only, no code written yet.
+- Decided Feature 003 covers the same metrics as Feature 002 (accepted/rejected/invalid-result counts, average/median/min/max sdiff, p50/p90/p99 percentiles, best share today, best share ever), grouped per username.
+- Decided daily per-user best, previous daily best, daily improvement amount, and daily improvement percentage stay out of Feature 003 and remain owned by Feature 007 - Daily Best Ticker.
+- Decided the return shape is a dict keyed by username, each value having the same stat fields as compute_pool_statistics's return value, mirroring the eventual analytics.json "users" section design from Feature 005.
+- Decided worker-level breakdown stays out of Feature 003 and is deferred to Feature 004 - Worker Statistics; grouping is purely by username.
+- Decided shares with a missing, None, or non-string username are excluded entirely from the per-user breakdown (no entry is created for them), since they cannot be attributed to a user.
+- Decided the new module reuses pool_statistics.py's validation and math primitives (is_valid_result, is_valid_sdiff, parse_createdate, createdate_to_utc, percentile, median, _BestTracker) rather than duplicating the already-tested logic; pool_statistics.py itself is not modified.
+- Approved design recorded as Feature 003 - User Statistics, status: Design Completed.
+- Implemented Feature 003 - User Statistics per the approved design.
+- user_statistics.py created, importing pool_statistics.py's validation and math primitives (is_valid_result, is_valid_sdiff, parse_createdate, createdate_to_utc, percentile, median, _BestTracker) rather than duplicating them; pool_statistics.py confirmed unmodified.
+- Independent test-engineer pass (27 new tests, 100 total) found no Blocking or Major issues. Two Minor items noted: whitespace-only usernames (e.g. "   ") passed validation and became their own top-level user entry; user_statistics.py was accidentally git-ignored (no .gitignore allowlist entry).
+- Resolved both Minor items: added `!/user_statistics.py` to .gitignore alongside the existing parse_share_analytics.py/pool_statistics.py entries; changed is_valid_username() to `isinstance(value, str) and value.strip() != ""` so whitespace-only usernames are excluded, while keeping stripping validation-only so a valid-but-padded username (e.g. " alice ") is still stored verbatim as the dict key and in best_share records.
+- Updated the regression suite (tests/test_user_statistics.py) to assert whitespace-only usernames are excluded and that valid padded usernames are not altered in storage; full suite now 101 tests, all passing, run via `python3 -m unittest discover -s tests`.
+- Independent code-reviewer pass (round 2, after the fixes) verified both fixes correct by tracing the code, and confirmed no Blocking or Major issues; confirmed no references to parse_pool_stats.py, pool_stats.json, or historical_data.json anywhere in the change.
+- Noted Minor items carried forward, not blocking: `users.setdefault(username, _UserAccumulator())` eagerly allocates a throwaway accumulator on every share; per-user unbounded in-memory accumulation multiplies the already-accepted Feature 002 full-rescan memory tradeoff across every distinct username; no --logs-dir CLI override in user_statistics.py's main(), same gap as pool_statistics.py; a username with incidental leading/trailing whitespace (e.g. " alice ") is treated as a wholly separate user from "alice" with independent stats, worth confirming as intended once Feature 007's ticker keys UI off usernames.
+- Feature 003 - User Statistics marked Completed in ROADMAP.md.
 
 ## 2026-07-15
 
