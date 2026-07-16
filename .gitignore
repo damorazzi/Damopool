@@ -23,6 +23,13 @@
 !/parse_share_analytics.py
 !/pool_statistics.py
 
+# Damopool project agent definitions
+!/.claude/
+/.claude/*
+!/.claude/agents/
+/.claude/agents/*
+!/.claude/agents/*.md
+
 # Future Damopool application directories
 !/backend/
 !/backend/**
