@@ -450,7 +450,12 @@ component:
 2. **Error** (`error-banner.js`) — a fetch failure or a malformed payload
    (wrong `schema_version`, JSON parse failure). Never renders a blank
    page; if a cached payload exists it stays visible underneath the
-   banner.
+   banner. "Wrong `schema_version`" is checked by major version only
+   (Phase D, Milestone 2, `core/errors.js`): a minor/patch bump (`1.1`
+   to `1.2`) is assumed backward-compatible and passes, only a major
+   bump (`1.x` to `2.0`) is treated as the breaking change this
+   frontend was not built against — an exact-string match would break
+   the frontend on every non-breaking backend schema addition.
 3. **Empty** (`empty-state.js`) — valid, successfully-fetched data that is
    legitimately empty for a specific view: a worker whose `best_share_today`
    is `null` and whose `rolling_windows.24h` shows no recent activity, an

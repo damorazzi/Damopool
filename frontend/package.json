@@ -1,0 +1,9 @@
+{
+  "name": "damopool-frontend",
+  "private": true,
+  "type": "module",
+  "description": "Damopool website frontend -- vanilla ES modules, no build step (docs/ARCHITECTURE.md Section 3).",
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  }
+}
