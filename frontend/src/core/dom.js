@@ -1,0 +1,46 @@
+// A minimal spec-tree format plus a renderer -- the shared boundary
+// between pure, testable component logic and real DOM. This is where
+// docs/ARCHITECTURE.md Section 18's XSS requirement is enforced
+// structurally rather than per-component: specToDom is the only place
+// text becomes DOM, and it always goes through textContent, never
+// innerHTML, so a component author cannot accidentally introduce a
+// string-concatenation XSS path even for an untrusted username or
+// workername.
+//
+// el() builds a spec (a plain object, no DOM APIs involved) and is
+// fully unit-testable in Node. specToDom(spec) converts a spec into
+// real DOM nodes and therefore needs a `document` global -- it is
+// reviewed by reading, the same tradeoff already made for router.js's
+// createRouter.
+
+export function el(tag, { className, attrs = {}, text, children = [] } = {}) {
+  return { tag, className, attrs, text, children };
+}
+
+export function specToDom(spec) {
+  if (typeof spec === "string") {
+    return document.createTextNode(spec);
+  }
+
+  const node = document.createElement(spec.tag);
+
+  if (spec.className) {
+    node.className = spec.className;
+  }
+
+  for (const [key, value] of Object.entries(spec.attrs || {})) {
+    node.setAttribute(key, value);
+  }
+
+  // textContent, never innerHTML -- the one enforcement point for
+  // docs/ARCHITECTURE.md Section 18.
+  if (spec.text !== undefined && spec.text !== null) {
+    node.textContent = spec.text;
+  }
+
+  for (const child of spec.children || []) {
+    node.appendChild(specToDom(child));
+  }
+
+  return node;
+}
