@@ -20,7 +20,7 @@ Status: Completed
 Feature 006 - Website Integration
 Status: Completed
 
-Feature 007 - Daily Best Ticker
+Feature 007 - Damopool Website (originally "Daily Best Ticker", redefined 2026-07-17 — see PROJECT_LOG.md)
 Status: Planned
 
 Feature 008 - Achievements
