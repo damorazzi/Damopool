@@ -1,0 +1,83 @@
+/* Design tokens that do not change between themes.
+   Colour tokens live in theme-dark.css / theme-light.css instead --
+   see docs/DESIGN_SYSTEM.md Section 12. Values below come from
+   docs/DESIGN_SYSTEM.md Sections 5-9, plus the breakpoint values from
+   docs/ARCHITECTURE.md Section 12 (see that section's own comment
+   further down). */
+
+:root {
+  /* Typography -- Section 5 */
+  --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-family-mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas",
+    "Roboto Mono", monospace;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-md: 1.125rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  --font-size-3xl: 2.5rem;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.2;
+  --line-height-base: 1.5;
+  --line-height-compact: 1.4;
+
+  /* Spacing -- Section 6 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radius, border, elevation -- Section 7 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  --border-width: 1px;
+  --border-color: var(--color-border);
+
+  --glow-accent: 0 0 12px rgba(255, 215, 0, 0.35);
+
+  /* Iconography -- Section 8 */
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+
+  /* Motion -- Section 9 */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Responsive breakpoints, as tokens rather than hard-coded values
+     -- docs/ARCHITECTURE.md Section 12, reused by DESIGN_SYSTEM.md
+     Section 11. Custom properties cannot be used inside @media
+     conditions, so these exist for documentation/JS use (e.g. a
+     ResizeObserver threshold); CSS @media queries below repeat the
+     literal pixel values. */
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}

@@ -110,6 +110,16 @@ not a hunt through every component's CSS.
 | `--color-success` | `#4caf50` | Positive values, "active" status, improvement |
 | `--color-danger` | `#e05252` | Errors, rejected shares, destructive actions |
 
+Implementation note (Phase D, Milestone 1): `theme-dark.css` also defines
+`--color-accent-text`, `--color-success-text`, and `--color-danger-text`
+as aliases equal to their bare counterparts above. These are not a new
+colour decision — dark theme genuinely has no need for a darkened
+variant (Section 4.3's numbers still hold) — they exist purely so
+component CSS can consistently write "the `-text` token for text use,
+the bare token for fill use" in both themes without a theme-conditional
+branch, the same convention light theme already needs for real
+contrast reasons.
+
 ### 4.2 Light theme
 
 | Token | Value | Role |

@@ -1,0 +1,22 @@
+/* Dark theme colour tokens -- docs/DESIGN_SYSTEM.md Section 4.1
+   (including the -text alias note added there for Milestone 1).
+   Dark is the default theme (docs/ARCHITECTURE.md Section 8): a bare
+   :root selector already matches regardless of whether data-theme is
+   set, so it covers both the explicit data-theme="dark" case and the
+   fallback before theme detection runs, with no separate selector
+   needed. */
+
+:root {
+  --color-bg: #12100d;
+  --color-surface: #1e1a15;
+  --color-surface-raised: #26211a;
+  --color-border: #3a332a;
+  --color-text-primary: #f5f1e8;
+  --color-text-secondary: #b8ae9c;
+  --color-accent: #ffd700;
+  --color-accent-text: #ffd700;
+  --color-success: #4caf50;
+  --color-success-text: #4caf50;
+  --color-danger: #e05252;
+  --color-danger-text: #e05252;
+}

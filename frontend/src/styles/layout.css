@@ -1,0 +1,78 @@
+/* Shell/grid structure. Breakpoints and column counts match
+   docs/ARCHITECTURE.md Section 12 and docs/DESIGN_SYSTEM.md Section
+   11's table exactly. Mobile-first: base rules are the <480px case,
+   each @media rule below adds/overrides for a wider viewport. */
+
+.page-container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+}
+
+/* Generic grid for stat tiles / cards -- individual components
+   (Milestone: Shared components) place their content inside a cell,
+   this only controls column count and gap per breakpoint. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+/* Two-column layout for a chart alongside a side panel (e.g. the
+   Dashboard Overview wireframe, docs/ARCHITECTURE.md Section 22) --
+   single column until Desktop. */
+.split-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+/* Small tablet: 480-768px */
+@media (min-width: 480px) {
+  .page-container {
+    padding-inline: var(--space-5);
+  }
+
+  .tile-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Tablet: 768-1024px. .tile-grid repeats the same 2-column value set
+   at 480px -- docs/DESIGN_SYSTEM.md Section 11 specifies 2 columns
+   for both breakpoints (stat tiles pairing 2-up at small tablet vs.
+   card/tile grids at tablet), so this is intentional, not copy-paste
+   redundancy. */
+@media (min-width: 768px) {
+  .page-container {
+    padding-inline: var(--space-6);
+  }
+
+  .tile-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Desktop: 1024-1280px */
+@media (min-width: 1024px) {
+  .tile-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .tile-grid--wide {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .split-layout {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+/* Wide desktop: >=1280px -- same column structure as Desktop, but the
+   page stops stretching edge-to-edge (docs/DESIGN_SYSTEM.md Section
+   11). */
+@media (min-width: 1280px) {
+  .page-container {
+    max-width: 1280px;
+  }
+}

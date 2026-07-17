@@ -1,0 +1,16 @@
+/* Light theme colour tokens -- docs/DESIGN_SYSTEM.md Section 4.2. */
+
+:root[data-theme="light"] {
+  --color-bg: #faf8f3;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f0ece1;
+  --color-border: #ddd6c7;
+  --color-text-primary: #1e1a15;
+  --color-text-secondary: #6b6152;
+  --color-accent: #ffd700;
+  --color-accent-text: #8a6d00;
+  --color-success: #2e7d32;
+  --color-success-text: #2e7d32;
+  --color-danger: #e05252;
+  --color-danger-text: #c62828;
+}

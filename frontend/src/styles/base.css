@@ -1,0 +1,110 @@
+/* Reset and base element styles. Depends on tokens.css and a theme
+   file being loaded first. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-base);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  transition: background var(--duration-base) var(--ease-standard),
+    color var(--duration-base) var(--ease-standard);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+a {
+  color: var(--color-accent-text);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+/* Numeric values that should align in columns -- docs/DESIGN_SYSTEM.md
+   Section 5: ordinary numeric stats use the base font with
+   tabular-nums, not a separate monospace typeface. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Values where character ambiguity matters (usernames, workernames,
+   hashes) -- docs/DESIGN_SYSTEM.md Section 5. */
+.mono {
+  font-family: var(--font-family-mono);
+}
+
+/* Visible focus ring, applied consistently rather than per-component
+   -- docs/ARCHITECTURE.md Section 17, docs/DESIGN_SYSTEM.md Section
+   10.1: never remove focus-visible styling, only restyle it. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Skip-to-content link -- docs/ARCHITECTURE.md Section 17. Hidden
+   until focused, so it doesn't appear for mouse/touch users. */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-4);
+  z-index: 100;
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+  left: var(--space-2);
+}
+
+/* Visually hidden but still available to assistive technology --
+   used for chart accessible summaries (docs/ARCHITECTURE.md Section
+   17, docs/DESIGN_SYSTEM.md Section 10.6). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
