@@ -1,37 +1,34 @@
-# Damopool Development Process v1.0
+# Damopool Development Process v1.1
 
 ## 1. Purpose
 
-This document defines the official Damopool Development Process (Version
-1.0). It is based on the engineering workflow successfully validated
-during the implementation of Features 002 (Pool Statistics), 003 (User
-Statistics), and 004 (Worker Statistics). Future feature development
-should follow this process unless it is formally revised. It exists to
-provide a consistent, repeatable engineering process and to ensure anyone
-reviewing the project understands how software is designed, implemented,
-tested, reviewed, approved, and released.
+This document defines the official Damopool Development Process. It is
+based on the engineering workflow successfully validated during the
+implementation of Features 002 (Pool Statistics), 003 (User Statistics),
+004 (Worker Statistics), 005 (analytics.json), and 006 (Website
+Integration). Future feature development should follow this process
+unless it is formally revised. It exists to provide a consistent,
+repeatable engineering process and to ensure anyone reviewing the project
+understands how software is designed, implemented, tested, reviewed,
+approved, and released.
+
+Version 1.1 records one change: the single "Lead Engineer" model used
+through Feature 006 was replaced with a permanent, named engineering
+organisation (see PROJECT_LOG.md for why). The workflow, quality gates,
+and governance below are unchanged in substance by that transition — only
+who performs the work, and how that is named and documented, changed.
+Team role definitions have moved to ENGINEERING_ORGANISATION.md, so this
+document no longer duplicates them.
 
 ## 2. Team Roles
 
-**Lead Engineer** — the primary engineering agent. Reads project
-documentation and prior design decisions, designs each feature, writes
-production code, writes and runs sanity checks, invokes the Test Engineer
-and Code Reviewer, resolves their findings, updates project documentation,
-and produces the Human Approval Brief. The Lead Engineer is the only role
-that writes or modifies production code.
-
-**Test Engineer** — an independent subagent invoked once production code
-exists for a feature. Reads the code under test and its dependencies, and
-independently exercises it. May write new test files and run tests. Does
-not have the ability to edit production code and does not invoke other
-agents. Reports findings classified as Blocking, Major, or Minor, with a
-short description, reproduction steps, and file/line references for each.
-
-**Code Reviewer** — an independent subagent invoked after Test Engineer
-findings have been resolved. Read-only: reviews code for correctness,
-architecture, validation, edge cases, and compliance with CLAUDE.md. Does
-not edit files and does not invoke other agents. Reports findings using
-the same Blocking / Major / Minor classification.
+Team roles — the Engineering Manager and the specialist roles that
+support it — are fully defined in ENGINEERING_ORGANISATION.md, the
+authoritative Damopool engineering organisation handbook. That document
+covers purpose, responsibilities, authority, inputs, outputs, file
+boundaries, and communication paths for every role. It does not redefine
+workflow, quality gates, or governance; those remain exactly as recorded
+in this document.
 
 **Human (Project Owner)** — holds final authority over the project.
 Approves feature scope where it is not already an established analogue of
@@ -39,6 +36,12 @@ prior approved work, approves the Human Approval Brief, and authorizes
 every commit, every push, and every ROADMAP.md completion mark.
 
 ## 3. Authority Levels
+
+This section states the same authority boundaries that applied under the
+Lead Engineer model, unchanged in substance, with roles renamed to match
+ENGINEERING_ORGANISATION.md. See that document for the full per-role
+breakdown (including roles beyond the two listed here) of inputs,
+outputs, and file boundaries.
 
 **Human authority (non-delegable):**
 - Approving a Human Approval Brief
@@ -48,8 +51,9 @@ every commit, every push, and every ROADMAP.md completion mark.
 - Resolving scope or timing decisions with no precedent in prior approved
   work
 
-**Lead Engineer authority (exercised without per-step human approval, once
-a feature's scope is established):**
+**Engineering Manager authority (exercised without per-step human
+approval, once a feature's scope is established — this is the same
+authority the Lead Engineer held; only the name changed):**
 - Designing a feature that closely mirrors the structure of an
   already-approved prior feature
 - Implementing production code
@@ -103,10 +107,16 @@ feature to date:
 - Pushing to the remote repository
 - Marking a feature Completed in ROADMAP.md
 - Modifying CLAUDE.md
-- Modifying the engineering workflow or agent definitions
+- Modifying this document (DEVELOPMENT_PROCESS.md)
+- Modifying ENGINEERING_ORGANISATION.md
+- Modifying any agent definition, including creating a new one for a
+  currently-delegatable or future-placeholder role described in
+  ENGINEERING_ORGANISATION.md
 - Deleting project files
 - Changing the code of a previously shipped feature, except to fix a
   verified regression introduced by the current feature
+- Any public interface change with no precedent in prior approved work
+- Any major architectural change with no precedent in prior approved work
 - Resolving scope or sequencing questions that have no precedent in
   already-approved work (in practice, raised via a clarifying question to
   the human rather than assumed)
@@ -190,7 +200,7 @@ must be true:
   further along than independently confirmed (for example, marking
   ROADMAP.md Completed) are not made while a relevant review is still in
   progress; where this creates a timing choice, the human is asked rather
-  than the Lead Engineer guessing.
+  than the Engineering Manager guessing.
 - Status updates are concise: what changed, what was found, what happens
   next.
 

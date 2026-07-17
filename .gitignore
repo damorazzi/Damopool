@@ -19,6 +19,7 @@
 !/PROJECT_LOG.md
 !/README-DAMOPOOL.md
 !/DEVELOPMENT_PROCESS.md
+!/ENGINEERING_ORGANISATION.md
 
 # Current Damopool analytics code -- a single root-level pattern rather
 # than one entry per module, since a new root-level .py module has been
