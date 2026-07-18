@@ -24,15 +24,16 @@ import * as userDetail from "./pages/user-detail.js";
 import * as workerDetail from "./pages/worker-detail.js";
 import * as search from "./pages/search.js";
 import * as ticker from "./pages/ticker.js";
+import * as history from "./pages/history.js";
 
 // Every future page (docs/ARCHITECTURE.md Section 23) adds one entry
 // to both of these -- its own `route` export and a `{name: module}`
 // entry below -- with no other change required here. Pool/Users/
-// Workers/Search/Ticker each already had a nav entry waiting in
-// shell.js's APP_NAV_ITEMS (Milestone 5 anticipated them all); neither
-// detail page does or should -- both are reached by drilling down from
-// their list page (username/workername links), not from the top nav,
-// matching shell.js's own APP_NAV_ITEMS comment.
+// Workers/Search/Ticker/History each already had a nav entry waiting
+// in shell.js's APP_NAV_ITEMS (Milestone 5 anticipated them all);
+// neither detail page does or should -- both are reached by drilling
+// down from their list page (username/workername links), not from the
+// top nav, matching shell.js's own APP_NAV_ITEMS comment.
 export const ROUTES = [
   overview.route,
   pool.route,
@@ -42,6 +43,7 @@ export const ROUTES = [
   workerDetail.route,
   search.route,
   ticker.route,
+  history.route,
 ];
 
 const PAGES = {
@@ -53,6 +55,7 @@ const PAGES = {
   [workerDetail.route.name]: workerDetail,
   [search.route.name]: search,
   [ticker.route.name]: ticker,
+  [history.route.name]: history,
 };
 
 export function notFoundSpec() {

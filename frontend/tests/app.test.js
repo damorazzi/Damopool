@@ -10,12 +10,13 @@ import { route as userDetailRoute } from "../src/pages/user-detail.js";
 import { route as workerDetailRoute } from "../src/pages/worker-detail.js";
 import { route as searchRoute } from "../src/pages/search.js";
 import { route as tickerRoute } from "../src/pages/ticker.js";
+import { route as historyRoute } from "../src/pages/history.js";
 import { matchRoute } from "../src/core/router.js";
 import { THEME_STORAGE_KEY } from "../src/shell/shell.js";
 
 test("ROUTES", async (t) => {
   await t.test("includes every page's route, unmodified", () => {
-    assert.equal(ROUTES.length, 8);
+    assert.equal(ROUTES.length, 9);
     assert.equal(ROUTES[0], overviewRoute);
     assert.equal(ROUTES[1], poolRoute);
     assert.equal(ROUTES[2], usersRoute);
@@ -24,6 +25,7 @@ test("ROUTES", async (t) => {
     assert.equal(ROUTES[5], workerDetailRoute);
     assert.equal(ROUTES[6], searchRoute);
     assert.equal(ROUTES[7], tickerRoute);
+    assert.equal(ROUTES[8], historyRoute);
   });
 
   await t.test("the root path matches the Overview route, matching router.js's own matching logic", () => {
@@ -84,6 +86,12 @@ test("ROUTES", async (t) => {
     const match = matchRoute("/ticker", ROUTES);
     assert.ok(match);
     assert.equal(match.route.name, "ticker");
+  });
+
+  await t.test("/history matches the History route", () => {
+    const match = matchRoute("/history", ROUTES);
+    assert.ok(match);
+    assert.equal(match.route.name, "history");
   });
 
   await t.test("an unknown path does not match", () => {
