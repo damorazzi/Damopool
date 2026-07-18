@@ -19,6 +19,7 @@ import { mountShell, APP_NAV_ITEMS } from "./shell/shell.js";
 import * as overview from "./pages/overview.js";
 import * as pool from "./pages/pool.js";
 import * as users from "./pages/users.js";
+import * as workers from "./pages/workers.js";
 
 // Every future page (docs/ARCHITECTURE.md Section 23) adds one entry
 // to both of these -- its own `route` export and a `{name: module}`
@@ -27,12 +28,13 @@ import * as users from "./pages/users.js";
 // each of these nav entries already existed in shell.js's
 // APP_NAV_ITEMS (Milestone 5 anticipated them all), so no shell.js
 // change has been needed to add any of them.
-export const ROUTES = [overview.route, pool.route, users.route];
+export const ROUTES = [overview.route, pool.route, users.route, workers.route];
 
 const PAGES = {
   [overview.route.name]: overview,
   [pool.route.name]: pool,
   [users.route.name]: users,
+  [workers.route.name]: workers,
 };
 
 export function notFoundSpec() {

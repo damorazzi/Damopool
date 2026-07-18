@@ -93,6 +93,22 @@ test("dataTableSpec", async (t) => {
     assert.equal(cells[1].className, "data-table__cell");
   });
 
+  await t.test("a column with a render function renders its returned spec instead of plain text", () => {
+    const badgeLikeSpec = { tag: "span", className: "badge", text: "Active" };
+    const columns = [
+      { key: "workername", label: "Workername" },
+      { key: "status", label: "Status", render: (row) => (row.isActive ? badgeLikeSpec : { tag: "span", text: "Inactive" }) },
+    ];
+    const spec = dataTableSpec({ columns, rows: [{ workername: "rig1", isActive: true }] });
+    const table = spec.children[0];
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    const cells = tbody.children[0].children;
+    assert.equal(cells[1].tag, "td");
+    assert.equal(cells[1].text, undefined, "a rendered cell must not also set text");
+    assert.deepEqual(cells[1].children, [badgeLikeSpec]);
+    assert.equal(cells[1].attrs["data-label"], "Status");
+  });
+
   await t.test("a missing/null cell value renders as a placeholder dash, not 'null'/'undefined'", () => {
     const spec = dataTableSpec({ columns: COLUMNS, rows: [{ window: "24h", accepted: null, avgSdiff: undefined }] });
     const table = spec.children[0];

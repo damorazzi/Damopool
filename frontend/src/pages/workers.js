@@ -1,34 +1,22 @@
-// Users (list) page -- docs/ARCHITECTURE.md Section 4/5/9
-// (`/app/#/users`). Third complete page module, and the first to
-// render genuinely untrusted, attacker-influenceable text: usernames
-// carry no charset restriction (docs/ARCHITECTURE.md Section 18).
-// Every username that reaches this page's spec goes through el()'s
-// `text` field (-> specToDom's textContent, never innerHTML) or an
-// input's `value` attr (-> setAttribute, never string-concatenated
-// markup) -- the same enforcement already relied on throughout this
-// project, exercised here for the first time against data that is
-// actually attacker-controlled rather than server-computed numbers.
+// Workers (list) page -- docs/ARCHITECTURE.md Section 4/5/9
+// (`/app/#/workers`). Fourth complete page module. Mirrors users.js
+// closely (client-side substring search over an already-fetched
+// dictionary, the same search-input-preservation technique, the same
+// mountToken stale-remount guard) -- workername carries the same "no
+// charset restriction" untrusted-text status as username (Section 18),
+// and analytics.json's `workers` object is the same kind of plain
+// dictionary keyed by that untrusted text (Section 13's __proto__/
+// constructor-key warning), so transformWorkersData reads it via
+// Object.entries only, exactly like transformUsersData.
 //
-// analytics.json's `users` object is a plain JSON dictionary keyed by
-// those same unvalidated usernames (docs/ARCHITECTURE.md Section 13's
-// __proto__/constructor-key warning). transformUsersData reads it
-// exclusively via Object.entries (own enumerable properties only,
-// never walks the prototype chain the way `for...in` would) and never
-// spreads a user record onto another object under its own key --
-// every row is built as a fresh object literal with fixed, known
-// property names.
-//
-// Unlike overview.js/pool.js, this page has no chart -- a plain table
-// and a text input both re-theme automatically via CSS custom
-// properties, with no ECharts-specific repaint step needed, so there
-// is no core/state.js theme subscription here. What replaces the
-// chart-node-preservation concern from those pages is the search
-// input: a full spec rebuild on every keystroke would destroy and
-// recreate the <input> DOM node, silently stealing focus after every
-// character typed. defaultRender swaps the freshly-built (throwaway)
-// input for the actual, still-focused live one before inserting the
-// new tree, the same technique overview.js/pool.js use to keep a
-// chart's canvas node alive across a same-status re-render.
+// New to this page: workers[...].is_active is a genuine boolean field
+// (docs/ARCHITECTURE.md Section 25) -- exactly the field badge.js's
+// own module comment names as one of the "two genuine binary status
+// fields already in analytics.json" it was built for. This is that
+// field's first real consumer. Rendering a Badge inside a table cell
+// (rather than plain text) is why data-table.js gained an additive
+// `column.render` option this milestone -- every other page's columns
+// are unaffected, since `render` is opt-in.
 
 import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
@@ -41,14 +29,17 @@ import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
 import { errorBannerSpec } from "../components/error-banner.js";
 import { dataTableSpec } from "../components/data-table.js";
 import { searchBoxSpec } from "../components/search-box.js";
+import { badgeSpec } from "../components/badge.js";
 
 const ANALYTICS_ENDPOINT = "/analytics.json";
 
-export const route = { pattern: "/users", name: "users" };
+export const route = { pattern: "/workers", name: "workers" };
 
-const USER_COLUMNS = [
-  { key: "username", label: "Username", mono: true },
-  { key: "workerCount", label: "Workers", align: "right" },
+const WORKER_COLUMNS = [
+  { key: "workername", label: "Workername", mono: true },
+  { key: "status", label: "Status", render: (row) => badgeSpec({ variant: row.isActive ? "active" : "inactive" }) },
+  { key: "agent", label: "Agent" },
+  { key: "lastShare", label: "Last Share", align: "right" },
   { key: "accepted", label: "Accepted", align: "right" },
   { key: "rejected", label: "Rejected", align: "right" },
   { key: "avgSdiff", label: "Avg Sdiff", align: "right" },
@@ -60,24 +51,29 @@ const USER_COLUMNS = [
 // Pure data transformation
 // -------------------------------------------------------------------
 
-export function transformUsersData(payload) {
-  const users = (payload && payload.users) || {};
-  const rows = Object.entries(users)
-    .map(([username, record]) => ({
-      username,
-      workerCount: Array.isArray(record.workers) ? record.workers.length : 0,
+// docs/ARCHITECTURE.md Section 25 lists four worker-specific fields:
+// agent, first_share_at, last_share_at, is_active. first_share_at is
+// deliberately not read here -- this list view shows recency
+// (lastShareAt, "how active is this worker right now"), not
+// provenance ("when did it first appear"); the latter is more useful
+// as detail-page context (alongside rolling_windows, also not shown
+// here) than as a ninth list column. Revisit if a Worker Detail page
+// needs it.
+export function transformWorkersData(payload) {
+  const workers = (payload && payload.workers) || {};
+  const rows = Object.entries(workers)
+    .map(([workername, record]) => ({
+      workername,
+      agent: record.agent || null,
+      isActive: Boolean(record.is_active),
+      lastShareAt: record.last_share_at || null,
       acceptedCount: record.accepted_count,
       rejectedCount: record.rejected_count,
       averageSdiff: record.average_sdiff,
       bestShareToday: record.best_share_today || null,
       bestShareEver: record.best_share_ever || null,
     }))
-    // A stable, predictable default order -- analytics.json's key
-    // order is whatever analytics_builder.py happened to write, not a
-    // meaningful sort. No sort-column UI exists yet (data-table.js
-    // deliberately doesn't implement one -- see its own module
-    // comment), so this is the one sensible default until it does.
-    .sort((a, b) => a.username.localeCompare(b.username));
+    .sort((a, b) => a.workername.localeCompare(b.workername));
 
   return {
     generatedAt: (payload && payload.metadata && payload.metadata.generated_at) || null,
@@ -85,9 +81,9 @@ export function transformUsersData(payload) {
   };
 }
 
-export function isUsersEmpty(payload) {
-  const users = (payload && payload.users) || {};
-  return Object.keys(users).length === 0;
+export function isWorkersEmpty(payload) {
+  const workers = (payload && payload.workers) || {};
+  return Object.keys(workers).length === 0;
 }
 
 function staleMessage(generatedAtIso) {
@@ -95,22 +91,23 @@ function staleMessage(generatedAtIso) {
   return relative ? `Data may be stale -- last updated ${relative}.` : "Data may be stale.";
 }
 
-export function deriveUsersState({ payload, error = null, isStale = false } = {}) {
+export function deriveWorkersState({ payload, error = null, isStale = false } = {}) {
   if (!payload) {
     return { status: "error", data: null, error, isStale: false };
   }
-  const data = transformUsersData(payload);
-  const status = isUsersEmpty(payload) ? "empty" : "success";
+  const data = transformWorkersData(payload);
+  const status = isWorkersEmpty(payload) ? "empty" : "success";
   return { status, data, error, isStale: Boolean(isStale) };
 }
 
-// Case-insensitive substring match on username. An empty/whitespace-only
-// query is not a filter at all -- every row passes through unchanged.
-export function filterUsersByQuery(rows, query) {
+// Case-insensitive substring match on workername only -- matching
+// users.js's filterUsersByQuery scope exactly (not agent, not any
+// other field).
+export function filterWorkersByQuery(rows, query) {
   const trimmed = (query || "").trim();
   if (!trimmed) return rows;
   const needle = trimmed.toLowerCase();
-  return rows.filter((row) => row.username.toLowerCase().includes(needle));
+  return rows.filter((row) => row.workername.toLowerCase().includes(needle));
 }
 
 // -------------------------------------------------------------------
@@ -121,10 +118,17 @@ function formatCount(n) {
   return Number.isFinite(n) ? n.toLocaleString("en-US") : null;
 }
 
-export function formatUserRow(row) {
+export function formatWorkerRow(row) {
   return {
-    username: row.username,
-    workerCount: formatCount(row.workerCount),
+    workername: row.workername,
+    // Passed through raw, not stringified -- the "status" column's
+    // render() reads this boolean directly rather than a formatted
+    // display string, since it builds a Badge, not plain text.
+    isActive: row.isActive,
+    // Already normalized to null-or-string by transformWorkersData --
+    // no reformatting needed, unlike the numeric fields below.
+    agent: row.agent,
+    lastShare: formatRelativeTime(row.lastShareAt),
     accepted: formatCount(row.acceptedCount),
     rejected: formatCount(row.rejectedCount),
     avgSdiff: formatSdiff(row.averageSdiff),
@@ -139,21 +143,21 @@ export function formatUserRow(row) {
 
 function loadingSectionSpec() {
   return el("div", {
-    className: "users-page__loading",
+    className: "workers-page__loading",
     children: [loadingSkeletonSpec({ shape: "row", count: 5 })],
   });
 }
 
-export function buildUsersSpec(state) {
-  const heading = el("h1", { className: "users-page__title", text: "Users" });
+export function buildWorkersSpec(state) {
+  const heading = el("h1", { className: "workers-page__title", text: "Workers" });
 
   if (state.status === "loading") {
-    return el("div", { className: "users-page", children: [heading, loadingSectionSpec()] });
+    return el("div", { className: "workers-page", children: [heading, loadingSectionSpec()] });
   }
 
   if (state.status === "error") {
     return el("div", {
-      className: "users-page",
+      className: "workers-page",
       children: [heading, errorBannerSpec({ message: describeFetchError(state.error), icon: "error" })],
     });
   }
@@ -167,41 +171,41 @@ export function buildUsersSpec(state) {
 
   if (state.status === "empty") {
     return el("div", {
-      className: "users-page",
+      className: "workers-page",
       children: [
         heading,
         ...banners,
-        cardSpec({ children: [emptyStateSpec({ message: "No users have been recorded yet." })] }),
+        cardSpec({ children: [emptyStateSpec({ message: "No workers have been recorded yet." })] }),
       ],
     });
   }
 
   if (state.status !== "success") {
-    throw new Error(`buildUsersSpec: unrecognized status "${state.status}"`);
+    throw new Error(`buildWorkersSpec: unrecognized status "${state.status}"`);
   }
 
   const query = state.searchQuery || "";
-  const filteredRows = filterUsersByQuery(state.data.rows, query);
-  const searchBox = searchBoxSpec({ value: query, placeholder: "Search users", label: "Search users" });
+  const filteredRows = filterWorkersByQuery(state.data.rows, query);
+  const searchBox = searchBoxSpec({ value: query, placeholder: "Search workers", label: "Search workers" });
 
   const content =
     query.trim() && filteredRows.length === 0
       ? cardSpec({
-          children: [emptyStateSpec({ message: `No users match "${query.trim()}".` })],
+          children: [emptyStateSpec({ message: `No workers match "${query.trim()}".` })],
         })
       : cardSpec({
-          title: "Users",
+          title: "Workers",
           children: [
             dataTableSpec({
-              caption: "Pool users",
-              columns: USER_COLUMNS,
-              rows: filteredRows.map(formatUserRow),
+              caption: "Pool workers",
+              columns: WORKER_COLUMNS,
+              rows: filteredRows.map(formatWorkerRow),
             }),
           ],
         });
 
   return el("div", {
-    className: "users-page",
+    className: "workers-page",
     children: [heading, ...banners, searchBox, content],
   });
 }
@@ -210,25 +214,12 @@ export function buildUsersSpec(state) {
 // DOM glue -- mount/unmount lifecycle
 // -------------------------------------------------------------------
 
-const EMPTY_PAGE_SPEC = el("div", { className: "users-page" });
+const EMPTY_PAGE_SPEC = el("div", { className: "workers-page" });
 
-// Returns the search input node (reused if `reuseSearchInputNode` was
-// supplied and a matching one exists in the freshly-built tree) and
-// the freshly-built clear button, which is never reused -- unlike the
-// input, losing/regaining the clear button across a render carries no
-// focus/typing-state cost, so it is simplest to always rebuild it and
-// (re)wire its listener every render, exactly like the rest of the
-// page's non-stateful markup.
 function defaultRender(container, spec, { reuseSearchInputNode = null } = {}) {
   const node = specToDom(spec);
   const freshInputNode = node.querySelector(".search-box__input");
 
-  // Only ever report the *supplied* node as reused if the swap
-  // actually happened -- reporting it unconditionally (e.g. via
-  // `reuseSearchInputNode || freshInputNode`) would claim a node is
-  // live in the newly-inserted tree without having verified it was
-  // actually spliced in, if the swap guard below ever fails for a
-  // reason the caller didn't anticipate.
   let searchInputNode = freshInputNode;
   if (reuseSearchInputNode && freshInputNode && freshInputNode.parentNode) {
     freshInputNode.parentNode.replaceChild(reuseSearchInputNode, freshInputNode);
@@ -248,7 +239,7 @@ let mountToken = 0;
 let searchInputNode = null;
 let renderedStatus = null;
 let currentSearchQuery = "";
-let lastUsersState = null;
+let lastWorkersState = null;
 let stopPollingFn = null;
 let currentRender = defaultRender;
 let currentContainer = null;
@@ -258,7 +249,7 @@ export function mount(
   { fetchImpl, intervalMs, staleAfterMs, render = defaultRender } = {},
 ) {
   if (isMounted) {
-    throw new Error("users.mount: already mounted -- call unmount() first");
+    throw new Error("workers.mount: already mounted -- call unmount() first");
   }
   isMounted = true;
   mountToken += 1;
@@ -266,13 +257,10 @@ export function mount(
 
   searchInputNode = null;
   renderedStatus = null;
-  lastUsersState = null;
+  lastWorkersState = null;
   stopPollingFn = null;
   currentRender = render;
   currentContainer = container;
-  // docs/ARCHITECTURE.md Section 13: a search query is page-local UI
-  // state that must survive a route change -- read back whatever the
-  // user last typed here, rather than always starting blank.
   currentSearchQuery = getState().searchQuery || "";
 
   function isCurrent() {
@@ -282,27 +270,27 @@ export function mount(
   const safeStaleAfterMs = Number.isFinite(staleAfterMs) && staleAfterMs > 0 ? staleAfterMs : undefined;
   const fetchOptions = { fetchImpl, validate: validateSchema, staleAfterMs: safeStaleAfterMs };
 
-  function renderState(usersState) {
-    lastUsersState = usersState;
+  function renderState(workersState) {
+    lastWorkersState = workersState;
 
     const reuseInput =
-      renderedStatus === "success" && usersState.status === "success" && Boolean(searchInputNode);
+      renderedStatus === "success" && workersState.status === "success" && Boolean(searchInputNode);
 
-    const spec = buildUsersSpec({ ...usersState, searchQuery: currentSearchQuery });
+    const spec = buildWorkersSpec({ ...workersState, searchQuery: currentSearchQuery });
     const nodes = render(container, spec, {
       reuseSearchInputNode: reuseInput ? searchInputNode : null,
     });
 
     const isFreshInput = nodes.searchInputNode && nodes.searchInputNode !== searchInputNode;
     searchInputNode = nodes.searchInputNode || null;
-    renderedStatus = usersState.status;
+    renderedStatus = workersState.status;
 
     if (isFreshInput) {
       searchInputNode.addEventListener("input", (event) => {
         if (!isCurrent()) return;
         currentSearchQuery = event.target.value;
         setState({ searchQuery: currentSearchQuery });
-        renderState(lastUsersState);
+        renderState(lastWorkersState);
       });
     }
 
@@ -312,7 +300,7 @@ export function mount(
         currentSearchQuery = "";
         setState({ searchQuery: "" });
         if (searchInputNode) searchInputNode.value = "";
-        renderState(lastUsersState);
+        renderState(lastWorkersState);
         if (searchInputNode) searchInputNode.focus();
       });
     }
@@ -325,7 +313,7 @@ export function mount(
         analyticsFetchedAt: result.fetchedAt ? result.fetchedAt.toISOString() : null,
       });
     }
-    renderState(deriveUsersState(result));
+    renderState(deriveWorkersState(result));
   }
 
   renderState({ status: "loading" });
@@ -349,10 +337,9 @@ export function mount(
   })();
 }
 
-// Deliberately does not clear state.js's searchQuery -- the whole
-// point of storing it there rather than only in this module's own
-// currentSearchQuery is that it survives a route change (Section 13);
-// the next mount() reads it back.
+// Deliberately does not clear state.js's searchQuery -- same reasoning
+// as users.js: the whole point of storing it there is that it
+// survives a route change.
 export function unmount() {
   if (!isMounted) return;
   isMounted = false;
@@ -362,7 +349,7 @@ export function unmount() {
   }
   searchInputNode = null;
   renderedStatus = null;
-  lastUsersState = null;
+  lastWorkersState = null;
   currentRender(currentContainer, EMPTY_PAGE_SPEC);
   currentContainer = null;
 }

@@ -4,7 +4,6 @@ import {
   route,
   transformOverviewData,
   isOverviewEmpty,
-  describeFetchError,
   deriveOverviewState,
   buildPoolWindowsChartOption,
   buildPoolWindowsChartSummary,
@@ -107,31 +106,11 @@ test("isOverviewEmpty", async (t) => {
   });
 });
 
-test("describeFetchError", async (t) => {
-  await t.test("no error at all", () => {
-    assert.equal(describeFetchError(null), "Something went wrong.");
-  });
-
-  await t.test("network error", () => {
-    const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" });
-    assert.match(describeFetchError(error), /connection/);
-  });
-
-  await t.test("http error includes the status", () => {
-    const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "http", status: 500 });
-    assert.match(describeFetchError(error), /HTTP 500/);
-  });
-
-  await t.test("schema error", () => {
-    const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "schema" });
-    assert.match(describeFetchError(error), /unexpected format/);
-  });
-
-  await t.test("an unrecognized kind gets a generic message, not a blank one", () => {
-    const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "unknown" });
-    assert.ok(describeFetchError(error).length > 0);
-  });
-});
+// describeFetchError itself is now core/errors.js's own export, tested
+// directly in tests/core/errors.test.js -- this page's error-state
+// tests (buildOverviewSpec, below) confirm the integration (the error
+// banner renders whatever it returns) without re-testing its branching
+// logic here a second time.
 
 test("deriveOverviewState", async (t) => {
   await t.test("no payload at all is status error with no data", () => {

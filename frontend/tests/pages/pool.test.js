@@ -4,7 +4,6 @@ import {
   route,
   transformPoolData,
   isPoolEmpty,
-  describeFetchError,
   derivePoolState,
   buildPercentilesChartOption,
   buildPercentilesChartSummary,
@@ -106,26 +105,10 @@ test("isPoolEmpty", async (t) => {
   });
 });
 
-test("describeFetchError", async (t) => {
-  await t.test("network, http, schema, unknown, and no-error cases", () => {
-    assert.equal(describeFetchError(null), "Something went wrong.");
-    assert.match(
-      describeFetchError(new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" })),
-      /connection/,
-    );
-    assert.match(
-      describeFetchError(new FetchApiError("x", { endpoint: "/analytics.json", kind: "http", status: 500 })),
-      /HTTP 500/,
-    );
-    assert.match(
-      describeFetchError(new FetchApiError("x", { endpoint: "/analytics.json", kind: "schema" })),
-      /unexpected format/,
-    );
-    assert.ok(
-      describeFetchError(new FetchApiError("x", { endpoint: "/analytics.json", kind: "unknown" })).length > 0,
-    );
-  });
-});
+// describeFetchError itself is now core/errors.js's own export, tested
+// directly in tests/core/errors.test.js -- this page's error-state
+// tests (buildPoolSpec, below) confirm the integration without
+// re-testing its branching logic here a second time.
 
 test("derivePoolState", async (t) => {
   await t.test("no payload at all is status error with no data", () => {

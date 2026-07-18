@@ -2,15 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   route,
-  transformUsersData,
-  isUsersEmpty,
-  deriveUsersState,
-  filterUsersByQuery,
-  formatUserRow,
-  buildUsersSpec,
+  transformWorkersData,
+  isWorkersEmpty,
+  deriveWorkersState,
+  filterWorkersByQuery,
+  formatWorkerRow,
+  buildWorkersSpec,
   mount,
   unmount,
-} from "../../src/pages/users.js";
+} from "../../src/pages/workers.js";
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
 
@@ -18,26 +18,30 @@ function fullPayload(overrides = {}) {
   return {
     metadata: { schema_version: "1.1", generated_at: new Date().toISOString(), ...overrides.metadata },
     pool: {},
-    users: {
-      bob: {
+    users: {},
+    workers: {
+      rig2: {
+        agent: null,
+        is_active: false,
+        last_share_at: null,
+        accepted_count: 10,
+        rejected_count: 1,
+        average_sdiff: 50,
+        best_share_today: null,
+        best_share_ever: { username: "bob", workername: "rig2", sdiff: 400, timestamp: "unknown" },
+      },
+      rig1: {
+        agent: "cgminer/4.11.1",
+        is_active: true,
+        last_share_at: new Date(Date.now() - 5 * 60_000).toISOString(),
         accepted_count: 500,
         rejected_count: 2,
-        average_sdiff: 80,
-        best_share_today: { username: "bob", workername: "rig1", sdiff: 300, timestamp: "unknown" },
-        best_share_ever: { username: "bob", workername: "rig1", sdiff: 900, timestamp: "unknown" },
-        workers: ["rig1", "rig2"],
-      },
-      alice: {
-        accepted_count: 1000,
-        rejected_count: 5,
         average_sdiff: 105.5,
         best_share_today: { username: "alice", workername: "rig1", sdiff: 512.5, timestamp: "unknown" },
         best_share_ever: { username: "alice", workername: "rig1", sdiff: 2048, timestamp: "unknown" },
-        workers: ["rig1"],
       },
-      ...overrides.users,
+      ...overrides.workers,
     },
-    workers: {},
     daily_bests: {},
     live_ticker: [],
     ...overrides,
@@ -56,186 +60,192 @@ function findByClassName(spec, className) {
 }
 
 test("route", async (t) => {
-  await t.test("matches router.js's routes-array shape and is distinct from Overview's/Pool's", () => {
-    assert.equal(route.pattern, "/users");
-    assert.equal(route.name, "users");
+  await t.test("matches router.js's routes-array shape and is distinct from the other pages'", () => {
+    assert.equal(route.pattern, "/workers");
+    assert.equal(route.name, "workers");
   });
 });
 
-test("transformUsersData", async (t) => {
-  await t.test("builds one row per dictionary entry, sorted alphabetically by username", () => {
-    const data = transformUsersData(fullPayload());
+test("transformWorkersData", async (t) => {
+  await t.test("builds one row per dictionary entry, sorted alphabetically by workername", () => {
+    const data = transformWorkersData(fullPayload());
     assert.equal(data.rows.length, 2);
-    assert.equal(data.rows[0].username, "alice");
-    assert.equal(data.rows[1].username, "bob");
-    assert.equal(data.rows[0].acceptedCount, 1000);
-    assert.equal(data.rows[0].workerCount, 1);
-    assert.equal(data.rows[1].workerCount, 2);
+    assert.equal(data.rows[0].workername, "rig1");
+    assert.equal(data.rows[1].workername, "rig2");
+    assert.equal(data.rows[0].isActive, true);
+    assert.equal(data.rows[1].isActive, false);
+    assert.equal(data.rows[0].agent, "cgminer/4.11.1");
+    assert.equal(data.rows[1].agent, null);
   });
 
   await t.test("reads the dictionary only via Object.entries -- an inherited/prototype key is never picked up", () => {
-    // Regression test for docs/ARCHITECTURE.md Section 13's warning:
-    // a plain object literal used as a lookup table can pick up
-    // unexpected inherited keys via for...in; Object.entries cannot.
-    const users = Object.create({ inherited: { accepted_count: 1, workers: [] } });
-    users.alice = { accepted_count: 1, rejected_count: 0, average_sdiff: 1, workers: [] };
-    const data = transformUsersData({ metadata: {}, users });
+    const workers = Object.create({ inherited: { accepted_count: 1, is_active: true } });
+    workers.rig1 = { accepted_count: 1, rejected_count: 0, average_sdiff: 1, is_active: false };
+    const data = transformWorkersData({ metadata: {}, workers });
     assert.equal(data.rows.length, 1);
-    assert.equal(data.rows[0].username, "alice");
+    assert.equal(data.rows[0].workername, "rig1");
   });
 
-  await t.test("degrades gracefully when users/metadata/workers fields are missing", () => {
-    const data = transformUsersData({ metadata: {}, users: { alice: {} } });
+  await t.test("degrades gracefully when workers/metadata fields are missing", () => {
+    const data = transformWorkersData({ metadata: {}, workers: { rig1: {} } });
     assert.equal(data.generatedAt, null);
-    assert.equal(data.rows[0].workerCount, 0);
-    assert.equal(data.rows[0].bestShareToday, null);
+    assert.equal(data.rows[0].isActive, false);
+    assert.equal(data.rows[0].agent, null);
+    assert.equal(data.rows[0].lastShareAt, null);
   });
 
-  await t.test("no users at all produces an empty rows array, not a throw", () => {
-    assert.deepEqual(transformUsersData({ metadata: {}, users: {} }).rows, []);
-    assert.deepEqual(transformUsersData({ metadata: {} }).rows, []);
-  });
-});
-
-test("isUsersEmpty", async (t) => {
-  await t.test("at least one user is not empty", () => {
-    assert.equal(isUsersEmpty(fullPayload()), false);
-  });
-
-  await t.test("zero users is empty", () => {
-    assert.equal(isUsersEmpty({ users: {} }), true);
-    assert.equal(isUsersEmpty({}), true);
+  await t.test("no workers at all produces an empty rows array, not a throw", () => {
+    assert.deepEqual(transformWorkersData({ metadata: {}, workers: {} }).rows, []);
+    assert.deepEqual(transformWorkersData({ metadata: {} }).rows, []);
   });
 });
 
-// describeFetchError itself is now core/errors.js's own export, tested
-// directly in tests/core/errors.test.js -- this page's error-state
-// tests (buildUsersSpec, below) confirm the integration without
-// re-testing its branching logic here a second time.
+test("isWorkersEmpty", async (t) => {
+  await t.test("at least one worker is not empty", () => {
+    assert.equal(isWorkersEmpty(fullPayload()), false);
+  });
 
-test("deriveUsersState", async (t) => {
+  await t.test("zero workers is empty", () => {
+    assert.equal(isWorkersEmpty({ workers: {} }), true);
+    assert.equal(isWorkersEmpty({}), true);
+  });
+});
+
+test("deriveWorkersState", async (t) => {
   await t.test("no payload at all is status error with no data", () => {
-    const state = deriveUsersState({ payload: null, error: new Error("boom") });
+    const state = deriveWorkersState({ payload: null, error: new Error("boom") });
     assert.equal(state.status, "error");
     assert.equal(state.data, null);
   });
 
-  await t.test("zero users is status empty", () => {
-    const state = deriveUsersState({ payload: fullPayload({ users: {} }) });
+  await t.test("zero workers is status empty", () => {
+    const state = deriveWorkersState({ payload: fullPayload({ workers: {} }) });
     assert.equal(state.status, "empty");
   });
 
   await t.test("real data is status success", () => {
-    const state = deriveUsersState({ payload: fullPayload() });
+    const state = deriveWorkersState({ payload: fullPayload() });
     assert.equal(state.status, "success");
   });
 
   await t.test("an error alongside a cached payload keeps status success and carries the error", () => {
     const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" });
-    const state = deriveUsersState({ payload: fullPayload(), error });
+    const state = deriveWorkersState({ payload: fullPayload(), error });
     assert.equal(state.status, "success");
     assert.equal(state.error, error);
   });
 });
 
-test("filterUsersByQuery", async (t) => {
-  const rows = transformUsersData(fullPayload()).rows;
+test("filterWorkersByQuery", async (t) => {
+  const rows = transformWorkersData(fullPayload()).rows;
 
   await t.test("an empty or whitespace-only query returns every row unchanged", () => {
-    assert.deepEqual(filterUsersByQuery(rows, ""), rows);
-    assert.deepEqual(filterUsersByQuery(rows, "   "), rows);
-    assert.deepEqual(filterUsersByQuery(rows, undefined), rows);
+    assert.deepEqual(filterWorkersByQuery(rows, ""), rows);
+    assert.deepEqual(filterWorkersByQuery(rows, "   "), rows);
   });
 
-  await t.test("matches a case-insensitive substring of the username", () => {
-    assert.deepEqual(filterUsersByQuery(rows, "ALI").map((r) => r.username), ["alice"]);
-    assert.deepEqual(filterUsersByQuery(rows, "b").map((r) => r.username), ["bob"]);
-  });
-
-  await t.test("leading/trailing whitespace in the query is trimmed before matching", () => {
-    assert.deepEqual(filterUsersByQuery(rows, "  alice  ").map((r) => r.username), ["alice"]);
+  await t.test("matches a case-insensitive substring of the workername only, not the agent", () => {
+    assert.deepEqual(filterWorkersByQuery(rows, "RIG1").map((r) => r.workername), ["rig1"]);
+    // "cgminer" only appears in rig1's agent string, not its
+    // workername -- must not match.
+    assert.deepEqual(filterWorkersByQuery(rows, "cgminer"), []);
   });
 
   await t.test("no match returns an empty array, not a throw", () => {
-    assert.deepEqual(filterUsersByQuery(rows, "nonexistent-user"), []);
+    assert.deepEqual(filterWorkersByQuery(rows, "nonexistent-rig"), []);
   });
 });
 
-test("formatUserRow", async (t) => {
-  await t.test("formats counts and sdiff values for display", () => {
-    const row = transformUsersData(fullPayload()).rows[0]; // alice
-    const formatted = formatUserRow(row);
-    assert.equal(formatted.username, "alice");
-    assert.equal(formatted.accepted, "1,000");
-    assert.equal(formatted.workerCount, "1");
+test("formatWorkerRow", async (t) => {
+  await t.test("formats counts/sdiff for display but passes isActive through raw for the Status column's render()", () => {
+    const row = transformWorkersData(fullPayload()).rows[0]; // rig1
+    const formatted = formatWorkerRow(row);
+    assert.equal(formatted.workername, "rig1");
+    assert.equal(formatted.isActive, true);
+    assert.equal(typeof formatted.isActive, "boolean");
+    assert.equal(formatted.accepted, "500");
+    assert.match(formatted.lastShare, /ago$|^just now$/);
   });
 
-  await t.test("missing best-share data formats as null (a placeholder dash downstream), not a throw", () => {
-    const formatted = formatUserRow({
-      username: "x",
-      workerCount: 0,
+  await t.test("a null agent/lastShareAt formats as null (a placeholder dash downstream), not a throw", () => {
+    const formatted = formatWorkerRow({
+      workername: "x",
+      isActive: false,
+      agent: null,
+      lastShareAt: null,
       acceptedCount: 0,
       rejectedCount: 0,
       averageSdiff: NaN,
       bestShareToday: null,
       bestShareEver: null,
     });
+    assert.equal(formatted.agent, null);
+    assert.equal(formatted.lastShare, null);
     assert.equal(formatted.bestToday, null);
-    assert.equal(formatted.bestEver, null);
   });
 });
 
-test("buildUsersSpec", async (t) => {
+test("buildWorkersSpec", async (t) => {
   await t.test("loading state renders skeletons, no search box or table", () => {
-    const spec = buildUsersSpec({ status: "loading" });
-    assert.ok(findByClassName(spec, "users-page__loading"));
+    const spec = buildWorkersSpec({ status: "loading" });
+    assert.ok(findByClassName(spec, "workers-page__loading"));
     assert.equal(findByClassName(spec, "search-box"), null);
     assert.equal(findByClassName(spec, "data-table"), null);
   });
 
   await t.test("error state (no data) renders only the error banner", () => {
     const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" });
-    const spec = buildUsersSpec({ status: "error", data: null, error, isStale: false });
+    const spec = buildWorkersSpec({ status: "error", data: null, error, isStale: false });
     assert.ok(findByClassName(spec, "error-banner"));
     assert.equal(findByClassName(spec, "search-box"), null);
   });
 
-  await t.test("empty state (no users at all) renders EmptyState, no search box", () => {
-    const data = transformUsersData(fullPayload({ users: {} }));
-    const spec = buildUsersSpec({ status: "empty", data, error: null, isStale: false });
+  await t.test("empty state (no workers at all) renders EmptyState, no search box", () => {
+    const data = transformWorkersData(fullPayload({ workers: {} }));
+    const spec = buildWorkersSpec({ status: "empty", data, error: null, isStale: false });
     assert.ok(findByClassName(spec, "empty-state"));
     assert.equal(findByClassName(spec, "search-box"), null);
   });
 
-  await t.test("success with no query renders the search box and the full table", () => {
-    const data = transformUsersData(fullPayload());
-    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+  await t.test("success renders the search box and a table with a Badge in the Status column", () => {
+    const data = transformWorkersData(fullPayload());
+    const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
     assert.ok(findByClassName(spec, "search-box"));
     const table = findByClassName(spec, "data-table");
-    assert.ok(table);
     const tbody = table.children.find((c) => c.tag === "tbody");
     assert.equal(tbody.children.length, 2);
+
+    // rig1 (row 0, active) and rig2 (row 1, inactive) -- Status is the
+    // second column.
+    const rig1StatusCell = tbody.children[0].children[1];
+    const badge = rig1StatusCell.children[0];
+    assert.equal(badge.className, "badge badge--success");
+    assert.match(badge.children[1].text, /Active/);
+
+    const rig2StatusCell = tbody.children[1].children[1];
+    const inactiveBadge = rig2StatusCell.children[0];
+    assert.equal(inactiveBadge.className, "badge badge--neutral");
+    assert.match(inactiveBadge.children[1].text, /Inactive/);
   });
 
   await t.test("success with a matching query renders a filtered table, search box stays", () => {
-    const data = transformUsersData(fullPayload());
-    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "ali" });
-    assert.ok(findByClassName(spec, "search-box"));
+    const data = transformWorkersData(fullPayload());
+    const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "rig1" });
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
     assert.equal(tbody.children.length, 1);
   });
 
   await t.test("success with a non-matching query renders a 'no matches' message, search box stays visible", () => {
-    const data = transformUsersData(fullPayload());
-    const spec = buildUsersSpec({
+    const data = transformWorkersData(fullPayload());
+    const spec = buildWorkersSpec({
       status: "success",
       data,
       error: null,
       isStale: false,
       searchQuery: "nonexistent",
     });
-    assert.ok(findByClassName(spec, "search-box"), "the search box must stay so the user can clear/edit it");
+    assert.ok(findByClassName(spec, "search-box"));
     assert.ok(findByClassName(spec, "empty-state"));
     assert.equal(findByClassName(spec, "data-table"), null);
     const emptyMessage = findByClassName(spec, "empty-state__message");
@@ -243,34 +253,38 @@ test("buildUsersSpec", async (t) => {
   });
 
   await t.test("success + error (cached fallback) shows the error banner above the live content", () => {
-    const data = transformUsersData(fullPayload());
+    const data = transformWorkersData(fullPayload());
     const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "http", status: 503 });
-    const spec = buildUsersSpec({ status: "success", data, error, isStale: false, searchQuery: "" });
+    const spec = buildWorkersSpec({ status: "success", data, error, isStale: false, searchQuery: "" });
     assert.ok(findByClassName(spec, "error-banner"));
     assert.ok(findByClassName(spec, "data-table"));
   });
 
   await t.test("an unrecognized status throws rather than silently rendering the success branch", () => {
-    assert.throws(() => buildUsersSpec({ status: "not-a-real-status" }), /unrecognized status/);
+    assert.throws(() => buildWorkersSpec({ status: "not-a-real-status" }), /unrecognized status/);
   });
 
-  await t.test("a malicious username passes through as table cell text, never markup", () => {
+  await t.test("a malicious workername passes through as table cell text, never markup", () => {
     const raw = "<img src=x onerror=alert(1)>";
-    const data = transformUsersData({ metadata: {}, users: { [raw]: { accepted_count: 1, workers: [] } } });
-    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    const data = transformWorkersData({ metadata: {}, workers: { [raw]: { accepted_count: 1, is_active: false } } });
+    const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
     assert.equal(tbody.children[0].children[0].text, raw);
     assert.equal(tbody.children[0].children[0].tag, "td");
   });
 
-  await t.test("a markup-like search query passes through the 'no matches' message as text, never markup", () => {
+  await t.test("a malicious agent string passes through as table cell text, never markup", () => {
     const raw = "<img src=x onerror=alert(1)>";
-    const data = transformUsersData(fullPayload());
-    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: raw });
-    const message = findByClassName(spec, "empty-state__message");
-    assert.equal(message.text, `No users match "${raw}".`);
-    assert.equal(message.tag, "p");
+    const data = transformWorkersData({
+      metadata: {},
+      workers: { rig1: { agent: raw, accepted_count: 1, is_active: false } },
+    });
+    const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    const table = findByClassName(spec, "data-table");
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    // Agent is the third column (Workername, Status, Agent).
+    assert.equal(tbody.children[0].children[2].text, raw);
   });
 });
 
@@ -300,7 +314,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     mount(fakeContainer(), { fetchImpl, render });
 
     assert.equal(renders.length, 1);
-    assert.ok(findByClassName(renders[0], "users-page__loading"));
+    assert.ok(findByClassName(renders[0], "workers-page__loading"));
 
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
@@ -336,7 +350,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
     unmount();
     assert.equal(renders.length, 3);
-    assert.equal(renders[2].className, "users-page");
+    assert.equal(renders[2].className, "workers-page");
     assert.deepEqual(renders[2].children, []);
   });
 
@@ -386,7 +400,6 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
 
     const persistentInput = fakeInputNode("");
-    const inputCalls = [];
     let renderCount = 0;
     const render = () => {
       renderCount += 1;
@@ -398,20 +411,15 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     mount(fakeContainer(), { fetchImpl, render, intervalMs: 1000 });
     await flush();
     await flush();
-    assert.equal(renderCount, 2, "loading render + first success render");
+    assert.equal(renderCount, 2);
 
-    // Fire the (single) attached 'input' listener directly, simulating
-    // a keystroke -- if the listener were attached more than once,
-    // firing it once would still only append once here since we're
-    // calling the handler function directly, so instead assert the
-    // listener reference itself is stable across the poll tick below.
     const listenerAfterFirstRender = persistentInput.listeners.input;
     assert.equal(typeof listenerAfterFirstRender, "function");
 
     t.mock.timers.tick(1000);
     await flush();
     await flush();
-    assert.equal(renderCount, 3, "the poll tick triggers another render");
+    assert.equal(renderCount, 3);
     assert.equal(
       persistentInput.listeners.input,
       listenerAfterFirstRender,
@@ -434,10 +442,10 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     await new Promise((resolve) => setImmediate(resolve));
 
     const rendersBeforeTyping = renders.length;
-    input.value = "alice";
+    input.value = "rig1";
     input.listeners.input({ target: input });
 
-    assert.equal(getState().searchQuery, "alice");
+    assert.equal(getState().searchQuery, "rig1");
     assert.equal(renders.length, rendersBeforeTyping + 1, "typing must trigger exactly one re-render");
   });
 
@@ -455,9 +463,9 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
 
-    input.value = "alice";
+    input.value = "rig1";
     input.listeners.input({ target: input });
-    assert.equal(getState().searchQuery, "alice");
+    assert.equal(getState().searchQuery, "rig1");
 
     clearButton.listeners.click();
 
@@ -467,7 +475,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
   });
 
   await t.test("mount() reads back a previously-set state.searchQuery rather than always starting blank", async () => {
-    setState({ searchQuery: "bob" });
+    setState({ searchQuery: "rig2" });
 
     let capturedSpec = null;
     const render = (target, spec) => {
@@ -482,20 +490,20 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
     const searchBox = findByClassName(capturedSpec, "search-box");
     const input = searchBox.children.find((c) => c.tag === "input");
-    assert.equal(input.attrs.value, "bob");
+    assert.equal(input.attrs.value, "rig2");
 
     setState({ searchQuery: "" });
   });
 
   await t.test("unmount() does not clear state.js's searchQuery -- it must survive a route change", async () => {
-    setState({ searchQuery: "alice" });
+    setState({ searchQuery: "rig1" });
     const render = () => ({ searchInputNode: null, clearButtonNode: null });
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
     mount(fakeContainer(), { fetchImpl, render });
     unmount();
 
-    assert.equal(getState().searchQuery, "alice");
+    assert.equal(getState().searchQuery, "rig1");
     setState({ searchQuery: "" });
   });
 

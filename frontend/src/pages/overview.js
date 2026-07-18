@@ -20,7 +20,7 @@
 
 import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
-import { validateSchema } from "../core/errors.js";
+import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
 import { formatSdiff, formatRelativeTime } from "../core/format.js";
 import { cardSpec } from "../components/card.js";
@@ -81,19 +81,6 @@ export function isOverviewEmpty(pool) {
   const hasBestToday = pool.best_share_today != null;
   const hasBestEver = pool.best_share_ever != null;
   return !hasAccepted && !hasRejected && !hasBestToday && !hasBestEver;
-}
-
-// Maps a core/api.js FetchApiError (or an unknown thrown value) to a
-// short, specific message -- docs/ARCHITECTURE.md Section 16 point 2.
-export function describeFetchError(error) {
-  if (!error) return "Something went wrong.";
-  if (error.kind === "network") return "Could not reach the analytics service. Check your connection.";
-  if (error.kind === "http") {
-    const status = error.status ? ` (HTTP ${error.status})` : "";
-    return `The analytics service returned an error${status}.`;
-  }
-  if (error.kind === "schema") return "The analytics data is in an unexpected format.";
-  return "Something went wrong loading analytics data.";
 }
 
 function staleMessage(generatedAtIso) {

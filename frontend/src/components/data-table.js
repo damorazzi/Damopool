@@ -56,6 +56,21 @@ function bodyCellSpec(column, row) {
   // data-table-specific style. Purely additive/opt-in: a column that
   // doesn't set `mono` renders exactly as before.
   if (column.mono) classes.push("mono");
+
+  // Optional: a column may render an arbitrary spec (e.g. Badge for
+  // workers.js's is_active) instead of plain text. Purely additive --
+  // a column with no `render` behaves exactly as before, and the
+  // returned spec still only ever reaches the DOM through el()/
+  // specToDom's own text/attrs handling, the same XSS-safety boundary
+  // every other cell already relies on.
+  if (column.render) {
+    return el("td", {
+      className: classes.join(" "),
+      attrs: { "data-label": column.label, role: "cell" },
+      children: [column.render(row)],
+    });
+  }
+
   const value = row[column.key];
   return el("td", {
     className: classes.join(" "),

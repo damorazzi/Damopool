@@ -19,21 +19,19 @@
 // are the thin DOM glue, with every DOM/ECharts-touching dependency
 // injectable for testability.
 //
-// core/errors.js's describeFetchError-equivalent and the
-// empty/pool-emptiness check below are intentionally duplicated from
-// overview.js rather than imported from it or extracted into a new
-// shared module: both are small, and DEVELOPMENT_PROCESS.md Section 5
-// treats changing a previously-shipped feature's code as Permanent
-// Human Governance unless fixing a verified regression -- extracting
-// a shared helper would mean editing overview.js's already-approved,
-// already-pushed file for a non-regression reason without that
-// approval. Worth revisiting once a third page needs the same logic
-// and this duplication becomes a real, human-approved refactor rather
-// than an assumption made along the way.
+// describeFetchError is imported from core/errors.js, not duplicated
+// here -- it was extracted (with explicit Human approval, per
+// DEVELOPMENT_PROCESS.md Section 5's governance over editing
+// previously-shipped files) once a fourth page (Workers) needed it,
+// replacing what were three identical copies here, in overview.js,
+// and in users.js. The pool-emptiness check below remains a
+// deliberate local duplicate of overview.js's isOverviewEmpty: it is
+// small and, unlike describeFetchError, was never named as a shared
+// trigger point -- revisited independently if that changes.
 
 import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
-import { validateSchema } from "../core/errors.js";
+import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
 import { formatSdiff, formatRelativeTime } from "../core/format.js";
 import { cardSpec } from "../components/card.js";
@@ -106,17 +104,6 @@ export function isPoolEmpty(pool) {
   const hasBestToday = pool.best_share_today != null;
   const hasBestEver = pool.best_share_ever != null;
   return !hasAccepted && !hasRejected && !hasBestToday && !hasBestEver;
-}
-
-export function describeFetchError(error) {
-  if (!error) return "Something went wrong.";
-  if (error.kind === "network") return "Could not reach the analytics service. Check your connection.";
-  if (error.kind === "http") {
-    const status = error.status ? ` (HTTP ${error.status})` : "";
-    return `The analytics service returned an error${status}.`;
-  }
-  if (error.kind === "schema") return "The analytics data is in an unexpected format.";
-  return "Something went wrong loading analytics data.";
 }
 
 function staleMessage(generatedAtIso) {

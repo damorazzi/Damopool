@@ -88,3 +88,25 @@ export function getStaleness(generatedAtIso, now, thresholdMs) {
   // data is *older* than the threshold, not merely as old as it.
   return { ageMs, isStale: ageMs > thresholdMs };
 }
+
+// Maps a core/api.js FetchApiError (or an unknown thrown value) to a
+// short, specific message for a page's error banner -- docs/
+// ARCHITECTURE.md Section 16 point 2. Extracted here from what were
+// three identical page-level copies (overview.js, pool.js, users.js)
+// once a fourth page needed the same logic (Workers) -- each of those
+// three copies explicitly named this exact trigger, and named
+// DEVELOPMENT_PROCESS.md Section 5 (changing a previously-shipped
+// file is Permanent Human Governance) as the reason the extraction
+// waited for that point rather than happening the first time the
+// duplication appeared. This move is purely mechanical: identical
+// behaviour, one definition instead of four.
+export function describeFetchError(error) {
+  if (!error) return "Something went wrong.";
+  if (error.kind === "network") return "Could not reach the analytics service. Check your connection.";
+  if (error.kind === "http") {
+    const status = error.status ? ` (HTTP ${error.status})` : "";
+    return `The analytics service returned an error${status}.`;
+  }
+  if (error.kind === "schema") return "The analytics data is in an unexpected format.";
+  return "Something went wrong loading analytics data.";
+}

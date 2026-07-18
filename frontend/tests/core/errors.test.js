@@ -4,7 +4,9 @@ import {
   classifyFetchError,
   validateSchema,
   getStaleness,
+  describeFetchError,
 } from "../../src/core/errors.js";
+import { FetchApiError } from "../../src/core/api.js";
 
 test("classifyFetchError", async (t) => {
   await t.test("a TypeError is classified as network", () => {
@@ -143,5 +145,41 @@ test("getStaleness", async (t) => {
   await t.test("a non-finite thresholdMs throws", () => {
     assert.throws(() => getStaleness(now.toISOString(), now, NaN), TypeError);
     assert.throws(() => getStaleness(now.toISOString(), now, Infinity), TypeError);
+  });
+});
+
+test("describeFetchError", async (t) => {
+  // Extracted from overview.js/pool.js/users.js's three previously
+  // identical copies (see this function's own comment) -- these
+  // assertions replace what used to be duplicated per-page test
+  // blocks; each page's own tests now only need to confirm they wire
+  // the (shared) result into their error banner correctly, not
+  // re-verify this branching logic a fourth time.
+  await t.test("no error at all", () => {
+    assert.equal(describeFetchError(null), "Something went wrong.");
+    assert.equal(describeFetchError(undefined), "Something went wrong.");
+  });
+
+  await t.test("a network error names the connection", () => {
+    const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" });
+    assert.match(describeFetchError(error), /connection/);
+  });
+
+  await t.test("an http error includes the status when present", () => {
+    const withStatus = new FetchApiError("x", { endpoint: "/analytics.json", kind: "http", status: 500 });
+    assert.match(describeFetchError(withStatus), /HTTP 500/);
+
+    const withoutStatus = new FetchApiError("x", { endpoint: "/analytics.json", kind: "http" });
+    assert.doesNotMatch(describeFetchError(withoutStatus), /HTTP/);
+  });
+
+  await t.test("a schema error names the format", () => {
+    const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "schema" });
+    assert.match(describeFetchError(error), /unexpected format/);
+  });
+
+  await t.test("an unrecognized kind gets a generic message, not a blank one", () => {
+    const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "unknown" });
+    assert.ok(describeFetchError(error).length > 0);
   });
 });
