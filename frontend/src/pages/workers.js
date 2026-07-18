@@ -39,7 +39,11 @@ export const route = { pattern: "/workers", name: "workers" };
 // Links each row to pages/worker-detail.js -- added once that page
 // existed to link to, mirroring users.js's identical usernameCellSpec
 // (docs/ARCHITECTURE.md Section 23's "add it when a page needs it").
-function workernameCellSpec(row) {
+//
+// Exported so pages/search.js can reuse it verbatim for its own
+// workername-result column -- additive, behaviour-preserving,
+// identical to users.js's own usernameCellSpec export.
+export function workernameCellSpec(row) {
   return el("a", {
     attrs: { href: buildHash("/workers/:workername", { workername: row.workername }) },
     text: row.workername,

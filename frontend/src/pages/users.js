@@ -57,7 +57,12 @@ export const route = { pattern: "/users", name: "users" };
 // own `mono: true` (below) already puts base.css's .mono class on the
 // <td>, and font-family inherits down to this anchor without needing
 // its own copy of the class.
-function usernameCellSpec(row) {
+//
+// Exported (not just used internally) so pages/search.js can reuse it
+// verbatim for its own username-result column rather than
+// reimplementing an identical link cell -- a behaviour-preserving,
+// additive change: existing internal usage below is unaffected.
+export function usernameCellSpec(row) {
   return el("a", {
     attrs: { href: buildHash("/users/:username", { username: row.username }) },
     text: row.username,
