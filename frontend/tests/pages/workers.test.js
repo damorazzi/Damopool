@@ -154,6 +154,10 @@ test("filterWorkersByQuery", async (t) => {
   await t.test("no match returns an empty array, not a throw", () => {
     assert.deepEqual(filterWorkersByQuery(rows, "nonexistent-rig"), []);
   });
+
+  await t.test("leading/trailing whitespace in a non-empty query is trimmed before matching", () => {
+    assert.deepEqual(filterWorkersByQuery(rows, "  rig1  ").map((r) => r.workername), ["rig1"]);
+  });
 });
 
 test("formatWorkerRow", async (t) => {
@@ -252,6 +256,15 @@ test("buildWorkersSpec", async (t) => {
     assert.match(emptyMessage.text, /nonexistent/);
   });
 
+  await t.test("a markup-like search query passes through the 'no matches' message as text, never markup", () => {
+    const raw = "<img src=x onerror=alert(1)>";
+    const data = transformWorkersData(fullPayload());
+    const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: raw });
+    const message = findByClassName(spec, "empty-state__message");
+    assert.equal(message.text, `No workers match "${raw}".`);
+    assert.equal(message.tag, "p");
+  });
+
   await t.test("success + error (cached fallback) shows the error banner above the live content", () => {
     const data = transformWorkersData(fullPayload());
     const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "http", status: 503 });
@@ -264,14 +277,40 @@ test("buildWorkersSpec", async (t) => {
     assert.throws(() => buildWorkersSpec({ status: "not-a-real-status" }), /unrecognized status/);
   });
 
-  await t.test("a malicious workername passes through as table cell text, never markup", () => {
+  await t.test("each row's workername links to its worker-detail page, correctly encoded", () => {
+    const data = transformWorkersData(fullPayload());
+    const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    const table = findByClassName(spec, "data-table");
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    const workernameCell = tbody.children[0].children[0]; // rig1, sorted first
+    assert.equal(workernameCell.tag, "td");
+    assert.equal(workernameCell.className, "data-table__cell mono");
+    const link = workernameCell.children[0];
+    assert.equal(link.tag, "a");
+    assert.equal(link.text, "rig1");
+    assert.equal(link.attrs.href, "#/workers/rig1");
+  });
+
+  await t.test("a workername needing encoding (/, #, %) round-trips through the link href", () => {
+    const raw = "weird/name#1 100%";
+    const data = transformWorkersData({ metadata: {}, workers: { [raw]: { accepted_count: 1, is_active: false } } });
+    const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    const table = findByClassName(spec, "data-table");
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    const link = tbody.children[0].children[0].children[0];
+    assert.equal(link.text, raw, "the visible text stays the raw workername, not the encoded one");
+    assert.equal(link.attrs.href, `#/workers/${encodeURIComponent(raw)}`);
+  });
+
+  await t.test("a malicious workername passes through the link as text, never markup", () => {
     const raw = "<img src=x onerror=alert(1)>";
     const data = transformWorkersData({ metadata: {}, workers: { [raw]: { accepted_count: 1, is_active: false } } });
     const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
-    assert.equal(tbody.children[0].children[0].text, raw);
-    assert.equal(tbody.children[0].children[0].tag, "td");
+    const link = tbody.children[0].children[0].children[0];
+    assert.equal(link.text, raw);
+    assert.equal(link.tag, "a");
   });
 
   await t.test("a malicious agent string passes through as table cell text, never markup", () => {

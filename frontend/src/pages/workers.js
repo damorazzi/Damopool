@@ -23,6 +23,7 @@ import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState } from "../core/state.js";
 import { formatSdiff, formatRelativeTime } from "../core/format.js";
+import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { emptyStateSpec } from "../components/empty-state.js";
 import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
@@ -35,8 +36,18 @@ const ANALYTICS_ENDPOINT = "/analytics.json";
 
 export const route = { pattern: "/workers", name: "workers" };
 
+// Links each row to pages/worker-detail.js -- added once that page
+// existed to link to, mirroring users.js's identical usernameCellSpec
+// (docs/ARCHITECTURE.md Section 23's "add it when a page needs it").
+function workernameCellSpec(row) {
+  return el("a", {
+    attrs: { href: buildHash("/workers/:workername", { workername: row.workername }) },
+    text: row.workername,
+  });
+}
+
 const WORKER_COLUMNS = [
-  { key: "workername", label: "Workername", mono: true },
+  { key: "workername", label: "Workername", mono: true, render: workernameCellSpec },
   { key: "status", label: "Status", render: (row) => badgeSpec({ variant: row.isActive ? "active" : "inactive" }) },
   { key: "agent", label: "Agent" },
   { key: "lastShare", label: "Last Share", align: "right" },
