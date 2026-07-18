@@ -20,20 +20,23 @@ import * as overview from "./pages/overview.js";
 import * as pool from "./pages/pool.js";
 import * as users from "./pages/users.js";
 import * as workers from "./pages/workers.js";
+import * as userDetail from "./pages/user-detail.js";
 
 // Every future page (docs/ARCHITECTURE.md Section 23) adds one entry
 // to both of these -- its own `route` export and a `{name: module}`
-// entry below -- with no other change required here. Pool was the
-// first page added this way since Milestone 7 built the mechanism;
-// each of these nav entries already existed in shell.js's
-// APP_NAV_ITEMS (Milestone 5 anticipated them all), so no shell.js
-// change has been needed to add any of them.
-export const ROUTES = [overview.route, pool.route, users.route, workers.route];
+// entry below -- with no other change required here. Pool/Users/
+// Workers each already had a nav entry waiting in shell.js's
+// APP_NAV_ITEMS (Milestone 5 anticipated them all); user-detail does
+// not and should not -- it is reached by drilling down from the Users
+// list (users.js's username links, added this same milestone), not
+// from the top nav, matching shell.js's own APP_NAV_ITEMS comment.
+export const ROUTES = [overview.route, pool.route, users.route, userDetail.route, workers.route];
 
 const PAGES = {
   [overview.route.name]: overview,
   [pool.route.name]: pool,
   [users.route.name]: users,
+  [userDetail.route.name]: userDetail,
   [workers.route.name]: workers,
 };
 
@@ -162,7 +165,12 @@ export function bootstrap({ target = document.body, mainSelector = "#main-conten
         return;
       }
 
-      page.mount(main);
+      // `params` was tracked in this file's own bookkeeping since
+      // Milestone 7 but never forwarded, since no page consumed it --
+      // user-detail.js is the first to. Harmless for every other page
+      // (their mount() options don't destructure `params` at all, so
+      // an unused extra key is simply ignored).
+      page.mount(main, { params: decision.params });
       activePage = { pageName: decision.pageName, params: decision.params };
     },
   });

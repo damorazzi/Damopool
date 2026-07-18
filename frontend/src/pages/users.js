@@ -35,6 +35,7 @@ import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState } from "../core/state.js";
 import { formatSdiff, formatRelativeTime } from "../core/format.js";
+import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { emptyStateSpec } from "../components/empty-state.js";
 import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
@@ -46,8 +47,25 @@ const ANALYTICS_ENDPOINT = "/analytics.json";
 
 export const route = { pattern: "/users", name: "users" };
 
+// Links each row to pages/user-detail.js -- added once that page
+// existed to link to (docs/ARCHITECTURE.md Section 23's "add it when
+// a page needs it" discipline, the same reasoning already applied to
+// data-table.js's render() option and sorting). buildHash correctly
+// encodes a username containing "/", "#", or "%" (docs/ARCHITECTURE.md
+// Section 11) -- the same untrusted-text handling as every other
+// reach of `username` on this page. No className here: the column's
+// own `mono: true` (below) already puts base.css's .mono class on the
+// <td>, and font-family inherits down to this anchor without needing
+// its own copy of the class.
+function usernameCellSpec(row) {
+  return el("a", {
+    attrs: { href: buildHash("/users/:username", { username: row.username }) },
+    text: row.username,
+  });
+}
+
 const USER_COLUMNS = [
-  { key: "username", label: "Username", mono: true },
+  { key: "username", label: "Username", mono: true, render: usernameCellSpec },
   { key: "workerCount", label: "Workers", align: "right" },
   { key: "accepted", label: "Accepted", align: "right" },
   { key: "rejected", label: "Rejected", align: "right" },

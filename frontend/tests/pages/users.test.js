@@ -254,14 +254,40 @@ test("buildUsersSpec", async (t) => {
     assert.throws(() => buildUsersSpec({ status: "not-a-real-status" }), /unrecognized status/);
   });
 
-  await t.test("a malicious username passes through as table cell text, never markup", () => {
+  await t.test("each row's username links to its user-detail page, correctly encoded", () => {
+    const data = transformUsersData(fullPayload());
+    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    const table = findByClassName(spec, "data-table");
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    const usernameCell = tbody.children[0].children[0]; // alice, sorted first
+    assert.equal(usernameCell.tag, "td");
+    assert.equal(usernameCell.className, "data-table__cell mono");
+    const link = usernameCell.children[0];
+    assert.equal(link.tag, "a");
+    assert.equal(link.text, "alice");
+    assert.equal(link.attrs.href, "#/users/alice");
+  });
+
+  await t.test("a username needing encoding (/, #, %) round-trips through the link href", () => {
+    const raw = "weird/name#1 100%";
+    const data = transformUsersData({ metadata: {}, users: { [raw]: { accepted_count: 1, workers: [] } } });
+    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    const table = findByClassName(spec, "data-table");
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    const link = tbody.children[0].children[0].children[0];
+    assert.equal(link.text, raw, "the visible text stays the raw username, not the encoded one");
+    assert.equal(link.attrs.href, `#/users/${encodeURIComponent(raw)}`);
+  });
+
+  await t.test("a malicious username passes through the link as text, never markup", () => {
     const raw = "<img src=x onerror=alert(1)>";
     const data = transformUsersData({ metadata: {}, users: { [raw]: { accepted_count: 1, workers: [] } } });
     const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
-    assert.equal(tbody.children[0].children[0].text, raw);
-    assert.equal(tbody.children[0].children[0].tag, "td");
+    const link = tbody.children[0].children[0].children[0];
+    assert.equal(link.text, raw);
+    assert.equal(link.tag, "a");
   });
 
   await t.test("a markup-like search query passes through the 'no matches' message as text, never markup", () => {
