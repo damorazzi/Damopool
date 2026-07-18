@@ -3,19 +3,27 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ROUTES, notFoundSpec, decideNavigation } from "../src/app.js";
 import { route as overviewRoute } from "../src/pages/overview.js";
+import { route as poolRoute } from "../src/pages/pool.js";
 import { matchRoute } from "../src/core/router.js";
 import { THEME_STORAGE_KEY } from "../src/shell/shell.js";
 
 test("ROUTES", async (t) => {
-  await t.test("includes the Overview page's route, unmodified", () => {
-    assert.equal(ROUTES.length, 1);
+  await t.test("includes both pages' routes, unmodified", () => {
+    assert.equal(ROUTES.length, 2);
     assert.equal(ROUTES[0], overviewRoute);
+    assert.equal(ROUTES[1], poolRoute);
   });
 
   await t.test("the root path matches the Overview route, matching router.js's own matching logic", () => {
     const match = matchRoute("/", ROUTES);
     assert.ok(match);
     assert.equal(match.route.name, "overview");
+  });
+
+  await t.test("/pool matches the Pool route", () => {
+    const match = matchRoute("/pool", ROUTES);
+    assert.ok(match);
+    assert.equal(match.route.name, "pool");
   });
 
   await t.test("an unknown path does not match", () => {

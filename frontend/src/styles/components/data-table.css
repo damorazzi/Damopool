@@ -1,0 +1,149 @@
+/* docs/DESIGN_SYSTEM.md Section 10.4. This is the first file under
+   styles/components/ -- every other shared component (Card, StatTile,
+   Badge, EmptyState, LoadingSkeleton, ErrorBanner, ChartPanel) still
+   has none, a known, already-tracked gap (PROJECT_LOG.md, Shared
+   Components / Overview milestones) that this file does not close.
+   DataTable is the one exception worth making now rather than later:
+   its defining architectural requirement -- collapsing to a stacked
+   card per row below 768px (docs/ARCHITECTURE.md Section 12) -- is
+   not a styling nicety layered on top of a working component, it is
+   the actual behaviour a "data table" is specified to have; without
+   this file the component could not do the one thing that makes it
+   distinct from a bare <table>.
+
+   Mobile-first, matching layout.css's and tokens.css's own convention:
+   base rules are the <768px (stacked-card) case, the single @media
+   rule below is the Tablet-and-up (real table) override. */
+
+.data-table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+/* Hidden below 768px the same way base.css's .visually-hidden hides
+   content -- clipped, not display:none, so column names stay in the
+   accessibility tree even though the visible label now comes from
+   each cell's own data-label (below). Duplicated here rather than
+   applying the .visually-hidden class from JS, since this hiding is
+   breakpoint-conditional, not permanent. */
+.data-table thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.data-table tbody tr {
+  display: block;
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  /* Uniform --space-4, matching docs/DESIGN_SYSTEM.md Section 10.3's
+     base Card padding -- each mobile row is styled as a card. */
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.data-table tbody tr:last-child {
+  margin-bottom: 0;
+}
+
+.data-table__cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.data-table__cell:last-child {
+  border-bottom: none;
+}
+
+.data-table__cell::before {
+  content: attr(data-label);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.data-table__cell--right {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .data-table thead {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
+    border: 0;
+  }
+
+  .data-table__h {
+    background: var(--color-surface-raised);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
+  }
+
+  .data-table__h--right {
+    text-align: right;
+  }
+
+  .data-table tbody tr {
+    display: table-row;
+    background: var(--color-surface);
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    transition: background var(--duration-fast) var(--ease-standard);
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--color-surface-raised);
+  }
+
+  .data-table__cell {
+    display: table-cell;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--border-width) solid var(--color-border);
+    gap: 0;
+  }
+
+  .data-table tbody tr:last-child .data-table__cell {
+    border-bottom: none;
+  }
+
+  .data-table__cell::before {
+    content: none;
+  }
+
+  .data-table__cell--right {
+    text-align: right;
+  }
+}
