@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Damopool Dashboard</title>
+  <link rel="stylesheet" href="../../src/styles/tokens.css">
+  <link rel="stylesheet" href="../../src/styles/theme-dark.css">
+  <link rel="stylesheet" href="../../src/styles/theme-light.css">
+  <link rel="stylesheet" href="../../src/styles/base.css">
+  <link rel="stylesheet" href="../../src/styles/layout.css">
+  <link rel="stylesheet" href="../../src/shell/shell.css">
+  <script>
+    // Prevents a flash of the wrong theme (docs/ARCHITECTURE.md Section
+    // 8) -- must run synchronously, before first paint, which rules out
+    // the deferred ES module shell.js itself uses for the identical
+    // resolution (mountShell() re-derives and applies the same value
+    // once it runs; this duplicate exists purely for timing, not
+    // because the logic differs -- see shell.js's resolveTheme).
+    (function () {
+      try {
+        var stored = window.localStorage.getItem("damopool-theme");
+        var theme = stored === "dark" || stored === "light"
+          ? stored
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
+</head>
+<body>
+  <main id="main-content"></main>
+  <script type="module">
+    import { bootstrap } from "../../src/app.js";
+    bootstrap();
+  </script>
+</body>
+</html>

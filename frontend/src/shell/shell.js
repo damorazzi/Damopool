@@ -18,7 +18,14 @@ import { parseHash } from "../core/router.js";
 import { formatRelativeTime } from "../core/format.js";
 import { getState, setState, subscribe } from "../core/state.js";
 
-const THEME_STORAGE_KEY = "damopool-theme";
+// Exported so the FOUC-prevention inline script in
+// public/app/index.html -- which cannot import this module, since it
+// must run synchronously before first paint and an ES module script
+// is deferred -- can have its own necessarily-duplicated literal
+// pinned against this value by a test, catching a future drift
+// between the two instead of silently reintroducing the flash this
+// module's resolveTheme() exists to prevent.
+export const THEME_STORAGE_KEY = "damopool-theme";
 
 // docs/ARCHITECTURE.md Section 9 route table, MPA half plus the single
 // "App" entry point -- docs/ARCHITECTURE.md Section 22's landing
