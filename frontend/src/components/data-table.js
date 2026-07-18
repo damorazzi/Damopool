@@ -50,6 +50,12 @@ function headerCellSpec(column) {
 function bodyCellSpec(column, row) {
   const classes = ["data-table__cell"];
   if (column.align === "right") classes.push("data-table__cell--right");
+  // docs/DESIGN_SYSTEM.md Section 5: "values where character ambiguity
+  // matters (usernames, workernames, hashes)" use the monospace
+  // typeface -- base.css's existing .mono utility class, not a new
+  // data-table-specific style. Purely additive/opt-in: a column that
+  // doesn't set `mono` renders exactly as before.
+  if (column.mono) classes.push("mono");
   const value = row[column.key];
   return el("td", {
     className: classes.join(" "),

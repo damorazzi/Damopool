@@ -18,18 +18,21 @@ import { createRouter } from "./core/router.js";
 import { mountShell, APP_NAV_ITEMS } from "./shell/shell.js";
 import * as overview from "./pages/overview.js";
 import * as pool from "./pages/pool.js";
+import * as users from "./pages/users.js";
 
 // Every future page (docs/ARCHITECTURE.md Section 23) adds one entry
 // to both of these -- its own `route` export and a `{name: module}`
-// entry below -- with no other change required here. Pool is the
+// entry below -- with no other change required here. Pool was the
 // first page added this way since Milestone 7 built the mechanism;
-// its nav entry already existed in shell.js's APP_NAV_ITEMS (Milestone
-// 5 anticipated it), so no shell.js change was needed to add it.
-export const ROUTES = [overview.route, pool.route];
+// each of these nav entries already existed in shell.js's
+// APP_NAV_ITEMS (Milestone 5 anticipated them all), so no shell.js
+// change has been needed to add any of them.
+export const ROUTES = [overview.route, pool.route, users.route];
 
 const PAGES = {
   [overview.route.name]: overview,
   [pool.route.name]: pool,
+  [users.route.name]: users,
 };
 
 export function notFoundSpec() {

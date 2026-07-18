@@ -83,6 +83,16 @@ test("dataTableSpec", async (t) => {
     assert.equal(firstRowCells[1].text, "10");
   });
 
+  await t.test("a column with mono:true adds the .mono utility class to its cells, others are unaffected", () => {
+    const columns = [{ key: "username", label: "Username", mono: true }, ...COLUMNS];
+    const spec = dataTableSpec({ columns, rows: [{ username: "alice", ...ROWS[0] }] });
+    const table = spec.children[0];
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    const cells = tbody.children[0].children;
+    assert.equal(cells[0].className, "data-table__cell mono");
+    assert.equal(cells[1].className, "data-table__cell");
+  });
+
   await t.test("a missing/null cell value renders as a placeholder dash, not 'null'/'undefined'", () => {
     const spec = dataTableSpec({ columns: COLUMNS, rows: [{ window: "24h", accepted: null, avgSdiff: undefined }] });
     const table = spec.children[0];
