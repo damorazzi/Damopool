@@ -51,6 +51,13 @@
 
   --glow-accent: 0 0 12px rgba(255, 215, 0, 0.35);
 
+  /* Stacking order. Deliberately minimal -- only the one layered
+     element that exists so far (the sticky shell header) has a token;
+     add to this set as later milestones actually introduce modals,
+     dropdowns, or tooltips, rather than pre-defining a scale for
+     elements that don't exist yet. */
+  --z-index-header: 50;
+
   /* Iconography -- Section 8 */
   --icon-size-sm: 16px;
   --icon-size-md: 20px;

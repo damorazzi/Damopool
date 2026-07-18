@@ -1,0 +1,183 @@
+/* Shared application shell -- docs/DESIGN_SYSTEM.md Section 10.7
+   (Navigation) and 10.11 (Footer). Depends on tokens.css, a theme
+   file, base.css, and layout.css (.page-container) already being
+   loaded. Mobile-first, matching layout.css's own convention: base
+   rules are the <768px case, the single @media rule below is the
+   Tablet-and-up override (docs/ARCHITECTURE.md Section 12).
+
+   Icon glyphs (icon-hamburger, icon-theme, icon-external-link) render
+   as empty aria-hidden placeholders -- the same known, tracked gap as
+   the Shared Components milestone (no styles/components/*.css icon
+   rendering exists yet). The toggle buttons are still fully usable:
+   their 40x40 box and visible focus ring do not depend on the icon
+   glyph being present. */
+
+.shell-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-index-header);
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--border-color);
+}
+
+.shell-header__inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+}
+
+.shell-header__logo {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.shell-header__logo:hover {
+  color: var(--color-accent-text);
+  text-decoration: none;
+}
+
+/* Groups the hamburger and theme toggle so a single auto margin keeps
+   them pinned to the header's trailing edge -- the nav toggle is only
+   in-flow below 768px and the nav list only at/above it, so two
+   separate auto margins on siblings would split the free space between
+   them instead of grouping the two buttons together. */
+.shell-header__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
+.shell-header__nav-toggle,
+.shell-header__theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.shell-header__nav-toggle:hover,
+.shell-header__theme-toggle:hover {
+  background: var(--color-surface-raised);
+}
+
+/* Below 768px, the nav list collapses behind the hamburger toggle into
+   a full-width dropdown panel (docs/DESIGN_SYSTEM.md Section 10.7). */
+.shell-header__nav {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--border-color);
+  padding: var(--space-4);
+}
+
+.shell-header__nav.is-open {
+  display: block;
+}
+
+.shell-header__nav-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.shell-header__nav-link {
+  display: inline-block;
+  padding-block: var(--space-2);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.shell-header__nav-link:hover {
+  color: var(--color-accent-text);
+  text-decoration: none;
+}
+
+.shell-header__nav-link--active {
+  color: var(--color-accent-text);
+  border-bottom-color: var(--color-accent);
+}
+
+@media (min-width: 768px) {
+  .shell-header__nav-toggle {
+    display: none;
+  }
+
+  .shell-header__nav {
+    display: block;
+    position: static;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  .shell-header__nav-list {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-5);
+  }
+}
+
+.shell-footer {
+  background: var(--color-bg);
+  border-top: var(--border-width) solid var(--border-color);
+  padding-block: var(--space-6);
+}
+
+.shell-footer__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.shell-footer__links {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.shell-footer__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.shell-footer__link:hover {
+  color: var(--color-accent-text);
+  text-decoration: none;
+}
+
+.shell-footer__staleness {
+  margin: 0;
+}
+
+/* No fetched timestamp yet (footerStalenessText returned null) --
+   render nothing rather than an empty line taking up footer space. */
+.shell-footer__staleness:empty {
+  display: none;
+}
