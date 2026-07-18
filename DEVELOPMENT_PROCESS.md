@@ -1,4 +1,4 @@
-# Damopool Development Process v1.1
+# Damopool Development Process v1.2
 
 ## 1. Purpose
 
@@ -19,6 +19,21 @@ and governance below are unchanged in substance by that transition — only
 who performs the work, and how that is named and documented, changed.
 Team role definitions have moved to ENGINEERING_ORGANISATION.md, so this
 document no longer duplicates them.
+
+Version 1.2 records one change: a Scope Assessment and Waiver requirement
+was added to the Standard Feature Workflow (Section 6) and Quality Gates
+(Section 7). An Engineering Manager governance audit (PROJECT_LOG.md,
+2026-07-18) found that across Feature 007's Milestones 5-7, the Test
+Engineer step of Section 6 had gone silently undispatched, and the Code
+Reviewer had been informally used outside its written, Python-only
+charter — in both cases without the Human approval Section 5 already
+required for exactly this kind of change, and without either Human
+Approval Brief disclosing it. This version closes that gap: a workflow
+step or an agent's scope may still turn out not to apply to a given
+feature, but that determination is now always recorded and always
+Human-approved before the process proceeds without it, never silently
+decided by the Engineering Manager alone. The workflow and quality gates
+are otherwise unchanged in substance.
 
 ## 2. Team Roles
 
@@ -141,33 +156,48 @@ explicit human approval.
 4. Manually sanity-check the implementation (synthetic data, and a
    read-only run against real production data) before involving the Test
    Engineer.
-5. Invoke the Test Engineer with full context: the files under test, the
+5. Before invoking the Test Engineer or the Code Reviewer, record a Scope
+   Assessment: does the work under review fall within that agent's
+   written charter (its `.claude/agents/*.md` definition and the
+   corresponding ENGINEERING_ORGANISATION.md section)? If yes, proceed to
+   invoke it (steps 6 and 9 below). If no, do not silently omit the step
+   and do not substitute another agent outside its own written charter.
+   Instead, present the human an explicit Waiver Request: which control
+   cannot apply, why, what (if anything) is proposed as a substitute for
+   this instance only, and what independent check will not occur as a
+   result. Proceed past this step only after the human explicitly
+   approves that specific waiver — a prior, unrelated approval (for
+   example, a commit or push authorization) does not constitute one.
+   Every waiver granted is recorded in PROJECT_LOG.md against the
+   milestone or feature it applies to, and reflected in the Human
+   Approval Brief per Section 9.
+6. Invoke the Test Engineer with full context: the files under test, the
    files they depend on, the approved design decisions, and specific focus
    areas.
-6. Report the Test Engineer's findings, classified by severity.
-7. Resolve every Blocking and Major finding, verifying each fix directly
+7. Report the Test Engineer's findings, classified by severity.
+8. Resolve every Blocking and Major finding, verifying each fix directly
    rather than assuming the fix is correct.
-8. Re-run the full test suite (and, where the first Test Engineer pass
+9. Re-run the full test suite (and, where the first Test Engineer pass
    found Blocking issues, send the fixes back to the same Test Engineer
    for independent re-verification) to confirm the fixes and rule out
    regressions.
-9. Invoke the Code Reviewer only once every Blocking and Major finding
-   from step 7 has actually been fixed and re-verified — invoking it
-   against code that still has known unfixed issues produces a stale
-   review that has to be repeated.
-10. Resolve every Blocking and Major finding from the Code Reviewer. Minor
+10. Invoke the Code Reviewer only once every Blocking and Major finding
+    from step 8 has actually been fixed and re-verified — invoking it
+    against code that still has known unfixed issues produces a stale
+    review that has to be repeated.
+11. Resolve every Blocking and Major finding from the Code Reviewer. Minor
     findings that are cheap, unambiguous, and necessary for the feature to
     be committable (for example, a missing .gitignore allowlist entry) are
     fixed immediately; other Minor findings are recorded as known
     limitations.
-11. Where fixes were made after a review pass, re-test and, if warranted,
+12. Where fixes were made after a review pass, re-test and, if warranted,
     request a fresh review pass rather than relying on a review of
     since-changed code.
-12. Update PROJECT_LOG.md with the full narrative: design decisions,
+13. Update PROJECT_LOG.md with the full narrative: design decisions,
     implementation summary, findings from each round of testing and
     review, fixes applied, and any findings carried forward.
-13. Produce a Human Approval Brief (see section 9) and stop.
-14. On explicit human approval, commit. Push only on a separate or
+14. Produce a Human Approval Brief (see section 9) and stop.
+15. On explicit human approval, commit. Push only on a separate or
     combined explicit instruction. Mark the feature Completed in
     ROADMAP.md as part of the same approved action.
 
@@ -177,15 +207,24 @@ Before a Human Approval Brief is presented, every one of the following
 must be true:
 
 1. Implementation is complete.
-2. An independent Test Engineer review has been performed.
-3. Every Blocking and Major issue found has been resolved.
-4. An independent re-test has confirmed the fixes and found no
-   regressions.
-5. An independent Code Reviewer review has been performed.
-6. Every Blocking and Major issue found has been resolved.
-7. A final re-test has been performed if any code changed after the
+2. A Scope Assessment (Section 6, step 5) has been recorded for both the
+   Test Engineer and the Code Reviewer. Any control that does not apply
+   per its written charter has an explicit, human-approved Waiver on
+   record — never silently omitted or silently substituted.
+3. An independent Test Engineer review has been performed, or its
+   omission is covered by an approved Waiver from gate 2.
+4. Every Blocking and Major issue found (where a Test Engineer review was
+   performed) has been resolved.
+5. An independent re-test has confirmed the fixes and found no
+   regressions (where a Test Engineer review was performed).
+6. An independent Code Reviewer review has been performed, or any use of
+   it outside its written charter is covered by an approved Waiver from
+   gate 2.
+7. Every Blocking and Major issue found has been resolved.
+8. A final re-test has been performed if any code changed after the
    review.
-8. PROJECT_LOG.md has been updated to reflect the above.
+9. PROJECT_LOG.md has been updated to reflect the above, including any
+   Waivers granted.
 
 ## 8. Progress Reporting
 
@@ -213,11 +252,18 @@ Every feature's final Human Approval Brief has consistently included:
 - Tests Created
 - Tests Executed
 - Test Results
+- Scope Assessments and Waivers (any control that did not apply per its
+  written charter, per Section 6 step 5 — never left implicit by simply
+  omitting the line below it)
 - Test Engineer Recommendation
 - Code Reviewer Recommendation
 - Remaining Known Limitations
 - Documentation Updated
 - Git Status
+
+Where a Waiver applies, the corresponding recommendation line states
+"N/A — waived" and points to the recorded Scope Assessment, rather than
+being silently omitted from the Brief.
 
 Test Engineer and Code Reviewer reports have consistently closed with one
 of three recommendations: **APPROVE**, **APPROVE WITH KNOWN LIMITATIONS**,
