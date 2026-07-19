@@ -58,6 +58,30 @@ test("fetchEndpoint", async (t) => {
     assert.deepEqual(receivedOptions.headers, {}, "the single injection point must reach fetchImpl");
   });
 
+  await t.test("bypassCache defaults to false -- a normal (non-polling) fetch does not force cache:no-store, per docs/ARCHITECTURE.md Section 20's 'normal caching on first load'", async () => {
+    let receivedOptions = null;
+    const fetchImpl = async (endpoint, options) => {
+      receivedOptions = options;
+      return jsonResponse(fullPayload());
+    };
+
+    await fetchEndpoint("/analytics.json", { fetchImpl });
+
+    assert.equal(receivedOptions.cache, undefined);
+  });
+
+  await t.test("bypassCache: true adds cache:no-store to the fetch init, per Section 20's 'the polling refetch is cache-busted' (Phase E Milestone 23)", async () => {
+    let receivedOptions = null;
+    const fetchImpl = async (endpoint, options) => {
+      receivedOptions = options;
+      return jsonResponse(fullPayload());
+    };
+
+    await fetchEndpoint("/analytics.json", { fetchImpl, bypassCache: true });
+
+    assert.equal(receivedOptions.cache, "no-store");
+  });
+
   await t.test("retries a network failure and succeeds on a later attempt", async () => {
     let calls = 0;
     const fetchImpl = async () => {
@@ -352,6 +376,34 @@ test("startPolling", async (t) => {
     t.mock.timers.tick(1000);
     await flush();
     assert.equal(updates.length, 2, "no further updates after stop()");
+  });
+
+  await t.test("every poll tick unconditionally bypasses the HTTP cache, even if the caller's own options don't ask for it (Phase E Milestone 23, docs/ARCHITECTURE.md Section 20)", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+
+    const receivedCacheValues = [];
+    const fetchImpl = async (endpoint, options) => {
+      receivedCacheValues.push(options.cache);
+      return jsonResponse(fullPayload());
+    };
+    const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+    // Caller passes bypassCache: false explicitly -- startPolling must
+    // still force it to true regardless, since this is not meant to be
+    // a per-caller opt-in.
+    const stop = startPolling("/analytics.json", 1000, () => {}, {
+      fetchImpl,
+      bypassCache: false,
+    });
+
+    t.mock.timers.tick(1000);
+    await flush();
+    await flush();
+
+    stop();
+
+    assert.equal(receivedCacheValues.length, 1);
+    assert.equal(receivedCacheValues[0], "no-store");
   });
 
   await t.test("stopping mid-flight (during an in-progress tick) suppresses that tick's update", async (t) => {

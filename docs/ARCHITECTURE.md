@@ -409,21 +409,27 @@ globally (Section 6).
 
 `core/api.js` is the sole fetch boundary. Responsibilities:
 
-- Fetch `/analytics.json` (new Nginx location required — see below),
-  `/pool_stats`, `/historical_data` where still needed for
-  not-yet-migrated data.
+- Fetch `/analytics.json`, `/pool_stats`, `/historical_data` where still
+  needed for not-yet-migrated data.
 - In-memory cache keyed by endpoint, with the fetch timestamp attached.
-- Configurable polling interval for `analytics.json`. **Open
-  infrastructure gap, not resolved by this document:** polling cadence
-  should be driven by how often `analytics.json` is actually regenerated,
-  but `analytics_builder.py` currently has no cron schedule at all
-  (Section 2) — this must be resolved (a DevOps Engineer placeholder
-  concern, `ENGINEERING_ORGANISATION.md` §14) before Phase D go-live, or
-  polling will silently refetch an unchanged file.
+- Configurable polling interval for `analytics.json`. Resolved in Phase E:
+  `analytics_builder.py` now runs on a 5-minute cron schedule (Milestone
+  22, mirroring `parse_pool_stats.py`'s own cadence), and `app.js` wires a
+  matching 5-minute `intervalMs` into every page's `mount()` call
+  (Milestone 23) — polling now genuinely runs in production, where it
+  never had before. Every poll-triggered fetch also passes
+  `bypassCache: true` (Milestone 23), forcing `cache: "no-store"` so a
+  refetch can't be silently served from the browser's own HTTP cache
+  instead of hitting the network — the Nginx alias (Milestone 21) sets no
+  `Cache-Control` header, so this was a real, not just theoretical, risk
+  once a real cadence existed. A normal (non-polling) `fetchEndpoint()`
+  call keeps ordinary caching, unaffected.
 - Staleness detection: compares `metadata.generated_at` from the fetched
   payload against the current time; a page can use this to show a
   "data as of Xm ago" indicator or a staleness warning, without every page
-  reimplementing that comparison.
+  reimplementing that comparison. `app.js` now supplies a real
+  `staleAfterMs` (15 minutes, 3x the poll interval) alongside `intervalMs`
+  (Milestone 23), so this indicator is live in production, not just built.
 - Retry with backoff on network failure; on failure, the last good cached
   payload is kept and shown with a visible staleness/error indicator
   (Section 16.2), rather than the UI going blank.
@@ -431,11 +437,13 @@ globally (Section 6).
   authenticated endpoints (admin, miner management) exist — named here so
   that when that need arrives, it is a one-file change.
 
-**Required Nginx change (Phase D, not done now):** a new `location`
-block aliasing `/analytics.json` to
+**Nginx change (Phase D concern, done in Phase E Milestone 21):** a
+`location = /analytics.json` block aliasing to
 `/home/damopool/ckpool-solo/ckpool/analytics.json`, mirroring the existing
-four JSON aliases exactly (`default_type application/json`). No other
-Nginx change is required by the routing strategy (Section 11).
+four JSON aliases exactly (`default_type application/json`), live in
+production and verified end-to-end (cron-generated file served correctly
+through the alias). No other Nginx change was required by the routing
+strategy (Section 11).
 
 ## 16. Error, Loading, and Empty States
 

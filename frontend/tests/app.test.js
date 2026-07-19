@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ROUTES, notFoundSpec, decideNavigation } from "../src/app.js";
+import {
+  ROUTES,
+  notFoundSpec,
+  decideNavigation,
+  ANALYTICS_POLL_INTERVAL_MS,
+  ANALYTICS_STALE_AFTER_MS,
+} from "../src/app.js";
 import { route as overviewRoute } from "../src/pages/overview.js";
 import { route as poolRoute } from "../src/pages/pool.js";
 import { route as usersRoute } from "../src/pages/users.js";
@@ -195,5 +201,16 @@ test("public/app/index.html", async (t) => {
   await t.test("loads card.css and chart-panel.css (Phase E Milestone 18: without these, chart-panel.js's canvas container has no rendered height)", () => {
     assert.match(html, /<link rel="stylesheet" href="\.\.\/\.\.\/src\/styles\/components\/card\.css">/);
     assert.match(html, /<link rel="stylesheet" href="\.\.\/\.\.\/src\/styles\/components\/chart-panel\.css">/);
+  });
+});
+
+test("Phase E Milestone 23: polling cadence constants", async (t) => {
+  await t.test("ANALYTICS_POLL_INTERVAL_MS matches analytics_builder.py's real cron cadence (every 5 minutes)", () => {
+    assert.equal(ANALYTICS_POLL_INTERVAL_MS, 5 * 60 * 1000);
+  });
+
+  await t.test("ANALYTICS_STALE_AFTER_MS is 3x the poll interval, so the staleness indicator tolerates ~2-3 missed cycles before firing", () => {
+    assert.equal(ANALYTICS_STALE_AFTER_MS, 15 * 60 * 1000);
+    assert.equal(ANALYTICS_STALE_AFTER_MS, ANALYTICS_POLL_INTERVAL_MS * 3);
   });
 });

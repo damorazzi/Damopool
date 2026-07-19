@@ -52,6 +52,17 @@ function computeStaleness(payload, staleAfterMs) {
 // errors are never retried (a broken payload will not fix itself on
 // retry, unlike a transient network failure), unlike HTTP/network
 // errors, which are retried with exponential backoff.
+//
+// bypassCache (docs/ARCHITECTURE.md Section 20, Phase E Milestone 23):
+// "analytics.json is fetched with normal caching on first load; only
+// the polling refetch is cache-busted, once its cadence is actually
+// known" -- Milestone 22 established that cadence, but the Nginx
+// alias (Milestone 21) sets no Cache-Control header, so without this
+// a poll's fetch() could be served from the browser's own HTTP cache
+// instead of hitting the network, silently defeating the entire
+// point of polling. startPolling (below) always passes this as true;
+// a normal, non-polling fetchEndpoint() call leaves it false so first
+// load keeps ordinary caching, exactly as Section 20 specifies.
 export async function fetchEndpoint(
   endpoint,
   {
@@ -60,6 +71,7 @@ export async function fetchEndpoint(
     retryDelayMs = 500,
     validate = null,
     staleAfterMs = null,
+    bypassCache = false,
   } = {},
 ) {
   if (!Number.isInteger(retries) || retries < 0) {
@@ -73,10 +85,14 @@ export async function fetchEndpoint(
   latestRequestSeq.set(endpoint, mySeq);
 
   let lastError = null;
+  const fetchInit = { headers: buildHeaders() };
+  if (bypassCache) {
+    fetchInit.cache = "no-store";
+  }
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      const response = await fetchImpl(endpoint, { headers: buildHeaders() });
+      const response = await fetchImpl(endpoint, fetchInit);
       if (!response.ok) {
         throw new FetchApiError(`HTTP ${response.status} from ${endpoint}`, {
           status: response.status,
@@ -166,13 +182,20 @@ export function startPolling(endpoint, intervalMs, onUpdate, options = {}) {
   }
 
   const { onError = null, ...fetchOptions } = options;
+  // Unconditional, not caller-configurable: every poll tick bypasses
+  // the HTTP cache, regardless of what the caller's own fetchOptions
+  // say -- this is what Section 20 means by "the polling refetch is
+  // cache-busted," not something each page needs to remember to opt
+  // into. Spread order matters: this must come after ...fetchOptions
+  // so it always wins.
+  const pollFetchOptions = { ...fetchOptions, bypassCache: true };
 
   let stopped = false;
   let timeoutId = null;
 
   async function tick() {
     if (stopped) return;
-    const result = await fetchEndpoint(endpoint, fetchOptions);
+    const result = await fetchEndpoint(endpoint, pollFetchOptions);
     if (stopped) return;
     try {
       onUpdate(result);

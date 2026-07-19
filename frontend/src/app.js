@@ -58,6 +58,19 @@ const PAGES = {
   [history.route.name]: history,
 };
 
+// Phase E Milestone 23: every page module's mount() has accepted
+// intervalMs/staleAfterMs since Phase D, but this call site never
+// supplied them, so polling has never actually run in production --
+// each page only ever did its one initial fetch on load. intervalMs
+// matches analytics_builder.py's real cron cadence (Milestone 22,
+// */5 * * * *) exactly -- polling faster would just re-fetch an
+// unchanged file (docs/ARCHITECTURE.md Section 15's own named risk).
+// staleAfterMs is 3x that cadence, so the staleness indicator only
+// fires after roughly 2-3 missed regeneration cycles, not on ordinary
+// single-cycle timing jitter.
+export const ANALYTICS_POLL_INTERVAL_MS = 5 * 60 * 1000;
+export const ANALYTICS_STALE_AFTER_MS = 15 * 60 * 1000;
+
 export function notFoundSpec() {
   return el("div", {
     className: "not-found-page",
@@ -188,7 +201,11 @@ export function bootstrap({ target = document.body, mainSelector = "#main-conten
       // user-detail.js is the first to. Harmless for every other page
       // (their mount() options don't destructure `params` at all, so
       // an unused extra key is simply ignored).
-      page.mount(main, { params: decision.params });
+      page.mount(main, {
+        params: decision.params,
+        intervalMs: ANALYTICS_POLL_INTERVAL_MS,
+        staleAfterMs: ANALYTICS_STALE_AFTER_MS,
+      });
       activePage = { pageName: decision.pageName, params: decision.params };
     },
   });
