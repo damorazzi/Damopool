@@ -2,9 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   formatSdiff,
+  formatCompactSdiff,
   formatPercentage,
   formatTimestamp,
   formatRelativeTime,
+  truncateAddress,
+  truncateWorkername,
 } from "../../src/core/format.js";
 
 test("formatSdiff", async (t) => {
@@ -31,6 +34,113 @@ test("formatSdiff", async (t) => {
   });
   await t.test("formats zero as zero, not null", () => {
     assert.equal(formatSdiff(0), "0");
+  });
+});
+
+test("formatCompactSdiff (Phase E Milestone 25)", async (t) => {
+  await t.test("matches the exact examples this was specified against", () => {
+    assert.equal(formatCompactSdiff(1000000), "1M");
+    assert.equal(formatCompactSdiff(2500000000), "2.5G");
+  });
+  await t.test("trims trailing zeros but keeps meaningful precision", () => {
+    assert.equal(formatCompactSdiff(82493037.86), "82.49M");
+    assert.equal(formatCompactSdiff(1500), "1.5K");
+  });
+  await t.test("values below 1000 have no unit suffix, still trimmed", () => {
+    assert.equal(formatCompactSdiff(500), "500");
+    assert.equal(formatCompactSdiff(500.567), "500.57");
+  });
+  await t.test("a value that rounds up to the next unit's threshold promotes correctly, rather than displaying the wrong unit (Code Review finding, round 1)", () => {
+    // The unit is chosen from the UNROUNDED value; toFixed(2) can then
+    // round a near-boundary value (e.g. 999999.9, picked as "K") up to
+    // "1000.00" at that unit -- which must promote to display "1M",
+    // not the misleading "1000K". None of this test block's original
+    // assertions used a near-boundary value, only exact powers of ten,
+    // so this bug shipped undetected in round 1.
+    assert.equal(formatCompactSdiff(999999.9), "1M");
+    assert.equal(formatCompactSdiff(999995), "1M");
+    assert.equal(formatCompactSdiff(999999.99), "1M");
+    // The same promotion applies below the first unit threshold too --
+    // a sub-1000 value that rounds up to exactly 1000 promotes to "1K"
+    // rather than displaying the unit-less "1000".
+    assert.equal(formatCompactSdiff(999.999), "1K");
+    assert.equal(formatCompactSdiff(999.995), "1K");
+    // A value close to but not reaching the threshold must NOT promote.
+    assert.equal(formatCompactSdiff(999949), "999.95K");
+    assert.equal(formatCompactSdiff(999950), "999.95K");
+    // Promotion applies at every unit boundary, not just K->M, and
+    // correctly preserves sign.
+    assert.equal(formatCompactSdiff(999999999999.9), "1T");
+    assert.equal(formatCompactSdiff(-999999.9), "-1M");
+  });
+  await t.test("zero formats as \"0\", not null or empty string", () => {
+    assert.equal(formatCompactSdiff(0), "0");
+  });
+  await t.test("negative values keep their sign", () => {
+    assert.equal(formatCompactSdiff(-2500000000), "-2.5G");
+  });
+  await t.test("scales correctly through every unit (K/M/G/T/P)", () => {
+    assert.equal(formatCompactSdiff(1e3), "1K");
+    assert.equal(formatCompactSdiff(1e6), "1M");
+    assert.equal(formatCompactSdiff(1e9), "1G");
+    assert.equal(formatCompactSdiff(1e12), "1T");
+    assert.equal(formatCompactSdiff(1e15), "1P");
+  });
+  await t.test("returns null for null/undefined/NaN/Infinity/wrong-type, matching formatSdiff's own contract", () => {
+    assert.equal(formatCompactSdiff(null), null);
+    assert.equal(formatCompactSdiff(undefined), null);
+    assert.equal(formatCompactSdiff(NaN), null);
+    assert.equal(formatCompactSdiff(Infinity), null);
+    assert.equal(formatCompactSdiff("12345"), null);
+  });
+});
+
+test("truncateAddress (Phase E Milestone 25)", async (t) => {
+  await t.test("shortens a long address to the first 7 characters plus an ellipsis", () => {
+    assert.equal(truncateAddress("bc1qmleyaz5gj0fxsayvk7mrgfcx8rel0qnscwnm88"), "bc1qmle…");
+  });
+  await t.test("leaves a short value unchanged", () => {
+    assert.equal(truncateAddress("alice"), "alice");
+  });
+  await t.test("a value exactly at the length boundary is not truncated", () => {
+    assert.equal(truncateAddress("1234567"), "1234567");
+    assert.equal(truncateAddress("12345678"), "1234567…");
+  });
+  await t.test("length is configurable", () => {
+    assert.equal(truncateAddress("abcdefghij", 3), "abc…");
+  });
+  await t.test("a non-string value passes through unchanged rather than throwing", () => {
+    assert.equal(truncateAddress(null), null);
+    assert.equal(truncateAddress(undefined), undefined);
+  });
+});
+
+test("truncateWorkername (Phase E Milestone 25)", async (t) => {
+  await t.test("truncates only the address portion, keeping the worker label intact", () => {
+    assert.equal(
+      truncateWorkername("bc1qmleyaz5gj0fxsayvk7mrgfcx8rel0qnscwnm88.OctaxeDamo"),
+      "bc1qmle…OctaxeDamo",
+    );
+  });
+  await t.test("no dot present -- falls back to truncateAddress's own whole-string behaviour", () => {
+    assert.equal(truncateWorkername("rig1"), "rig1");
+    assert.equal(truncateWorkername("bc1qmleyaz5gj0fxsayvk7mrgfcx8rel0qnscwnm88"), "bc1qmle…");
+  });
+  await t.test("an already-short address portion is left fully unchanged, dot included", () => {
+    assert.equal(truncateWorkername("short.label"), "short.label");
+  });
+  await t.test("the address portion exactly at the length boundary is not truncated", () => {
+    assert.equal(truncateWorkername("1234567.label"), "1234567.label");
+  });
+  await t.test("only the first dot splits address from label -- a label containing its own dot is preserved verbatim", () => {
+    assert.equal(
+      truncateWorkername("bc1qmleyaz5gj0fxsayvk7mrgfcx8rel0qnscwnm88.rig.1"),
+      "bc1qmle…rig.1",
+    );
+  });
+  await t.test("a non-string value passes through unchanged rather than throwing", () => {
+    assert.equal(truncateWorkername(null), null);
+    assert.equal(truncateWorkername(undefined), undefined);
   });
 });
 

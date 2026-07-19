@@ -186,6 +186,11 @@ test("buildPoolWindowsChartSummary", async (t) => {
     const summary = buildPoolWindowsChartSummary({});
     assert.match(summary, /15 min: no data/);
   });
+
+  await t.test("uses formatSdiff's full precision, not formatCompactSdiff's abbreviation -- this is accessible/screen-reader text (docs/ARCHITECTURE.md Section 17), not the visible chart (Code Review finding, Phase E Milestone 25: this exact function was accidentally switched to compact formatting and reverted -- the original fixture values here were all under 1000, where both formatters coincidentally produce identical output, which is why that regression shipped undetected)", () => {
+    const summary = buildPoolWindowsChartSummary({ "15m": { average_sdiff: 12345.67 } });
+    assert.match(summary, /12,345\.67/, "full comma-separated precision, not a compact abbreviation like \"12.35K\"");
+  });
 });
 
 test("buildOverviewSpec", async (t) => {

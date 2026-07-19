@@ -13,6 +13,7 @@ import {
 } from "../../src/pages/workers.js";
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
+import { truncateWorkername } from "../../src/core/format.js";
 
 function fullPayload(overrides = {}) {
   return {
@@ -298,18 +299,24 @@ test("buildWorkersSpec", async (t) => {
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
     const link = tbody.children[0].children[0].children[0];
-    assert.equal(link.text, raw, "the visible text stays the raw workername, not the encoded one");
+    assert.equal(
+      link.text,
+      truncateWorkername(raw),
+      "the visible text is the truncated raw workername, not the encoded one (Phase E Milestone 25 truncation is orthogonal to href encoding)",
+    );
     assert.equal(link.attrs.href, `#/workers/${encodeURIComponent(raw)}`);
+    assert.equal(link.attrs.title, raw, "the full untruncated workername stays available via title");
+    assert.equal(link.attrs["aria-label"], raw, "and via aria-label, for assistive tech that doesn't announce title");
   });
 
-  await t.test("a malicious workername passes through the link as text, never markup", () => {
+  await t.test("a malicious workername passes through the link as text, never markup, even truncated", () => {
     const raw = "<img src=x onerror=alert(1)>";
     const data = transformWorkersData({ metadata: {}, workers: { [raw]: { accepted_count: 1, is_active: false } } });
     const spec = buildWorkersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
     const link = tbody.children[0].children[0].children[0];
-    assert.equal(link.text, raw);
+    assert.equal(link.text, truncateWorkername(raw));
     assert.equal(link.tag, "a");
   });
 

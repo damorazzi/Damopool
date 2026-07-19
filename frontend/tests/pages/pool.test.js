@@ -183,6 +183,11 @@ test("buildPercentilesChartSummary", async (t) => {
     const summary = buildPercentilesChartSummary({});
     assert.match(summary, /p50: no data/);
   });
+
+  await t.test("uses formatSdiff's full precision, not formatCompactSdiff's abbreviation -- accessible/screen-reader text, not the visible chart (Code Review finding, Phase E Milestone 25)", () => {
+    const summary = buildPercentilesChartSummary({ p50: 12345.67 });
+    assert.match(summary, /12,345\.67/, "full comma-separated precision, not a compact abbreviation like \"12.35K\"");
+  });
 });
 
 test("buildRollingWindowsRows", async (t) => {

@@ -14,6 +14,95 @@ export function formatSdiff(sdiff) {
   return sdiff.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+// K/M/G/T/P at powers of 1000 -- the same SI/metric convention already
+// established for chart axis labels (pages/history.js's own
+// SIZE_UNIT_FACTORS/formatCompactDifficulty, kept local there since an
+// axis tick's fixed-width 2-decimal form ("2.50 G") is a different,
+// deliberately unabbreviated design goal from this function's prose/
+// table use). "G" for Giga, not "B" for Billion -- Intl.NumberFormat's
+// built-in `notation: "compact"` uses the wrong convention for a
+// mining-difficulty domain (KH/s, MH/s, GH/s, TH/s are the established
+// units here, not thousands/millions/billions).
+const COMPACT_UNIT_FACTORS = [
+  { suffix: "P", factor: 1e15 },
+  { suffix: "T", factor: 1e12 },
+  { suffix: "G", factor: 1e9 },
+  { suffix: "M", factor: 1e6 },
+  { suffix: "K", factor: 1e3 },
+];
+
+// Trailing zeros trimmed (e.g. "1.00" -> "1", "2.50" -> "2.5") so a
+// round number doesn't carry unnecessary precision -- matches the
+// "1,000,000 -> 1M" / "2,500,000,000 -> 2.5G" convention this was
+// specified against, distinct from formatSdiff's own always-precise
+// comma-separated form (still used where a spoken/exact reading
+// matters more than compactness, e.g. a chart's accessible summary
+// text).
+export function formatCompactSdiff(sdiff) {
+  if (!Number.isFinite(sdiff)) {
+    return null;
+  }
+  let unit = COMPACT_UNIT_FACTORS.find((u) => Math.abs(sdiff) >= u.factor) || null;
+  let scaled = unit ? sdiff / unit.factor : sdiff;
+  // The unit above is chosen from the UNROUNDED value, so a value just
+  // under a threshold (e.g. 999999.9, picked as "K") can round up to
+  // "1000.00" at that unit once toFixed(2) is applied -- which should
+  // display as "1M", not "1000K". Re-check the ROUNDED value and
+  // promote one unit up if it reached 1000; a second pass can never
+  // re-trigger this, since promoting divides by another factor of
+  // 1000, so the result is always back down near 1. Found in Code
+  // Review (Phase E Milestone 25) with no test in the original 21
+  // catching it, since every original test used an exact power of ten.
+  if (Math.abs(parseFloat(scaled.toFixed(2))) >= 1000) {
+    const currentIndex = unit ? COMPACT_UNIT_FACTORS.indexOf(unit) : COMPACT_UNIT_FACTORS.length;
+    const nextUnit = COMPACT_UNIT_FACTORS[currentIndex - 1];
+    if (nextUnit) {
+      unit = nextUnit;
+      scaled = sdiff / unit.factor;
+    }
+  }
+  const fixed = scaled.toFixed(2).replace(/\.?0+$/, "");
+  return unit ? `${fixed}${unit.suffix}` : fixed;
+}
+
+// docs/ARCHITECTURE.md Section 18: username/workername are untrusted
+// free text with no length limit, and a real BTC address is long
+// enough to dominate a table row. Shortens to the first `length`
+// characters plus an ellipsis; the caller is responsible for keeping
+// the full value available elsewhere (a `title` attribute, the link's
+// own href) since this function only affects what's visually shown.
+export function truncateAddress(value, length = 7) {
+  if (typeof value !== "string" || value.length <= length) {
+    return value;
+  }
+  return `${value.slice(0, length)}…`;
+}
+
+// A workername is conventionally "<address>.<worker label>" (e.g.
+// "bc1q...OctaxeDamo") -- truncating the whole string the same way
+// truncateAddress does would make every worker under the same user
+// show an identical truncated prefix, losing the one part that
+// actually distinguishes them. This truncates only the address
+// portion and keeps the label intact: "bc1qmle…OctaxeDamo", not
+// "bc1qmle…" (which would look the same for every worker on that
+// account) or "bc1qmle….OctaxeDamo" (a redundant literal "." right
+// after the ellipsis).
+export function truncateWorkername(value, length = 7) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const dotIndex = value.indexOf(".");
+  if (dotIndex === -1) {
+    return truncateAddress(value, length);
+  }
+  const address = value.slice(0, dotIndex);
+  const label = value.slice(dotIndex + 1);
+  if (address.length <= length) {
+    return value;
+  }
+  return `${address.slice(0, length)}…${label}`;
+}
+
 export function formatPercentage(value) {
   if (!Number.isFinite(value)) {
     return null;

@@ -159,6 +159,11 @@ test("buildWorkerWindowsChartOption / Summary", async (t) => {
     assert.match(summary, /15 min/);
     assert.match(summary, /24 hours/);
   });
+
+  await t.test("uses formatSdiff's full precision, not formatCompactSdiff's abbreviation -- accessible/screen-reader text, not the visible chart (Code Review finding, Phase E Milestone 25)", () => {
+    const summary = buildWorkerWindowsChartSummary({ "15m": { average_sdiff: 12345.67 } });
+    assert.match(summary, /12,345\.67/, "full comma-separated precision, not a compact abbreviation like \"12.35K\"");
+  });
 });
 
 test("buildWorkerDetailSpec", async (t) => {

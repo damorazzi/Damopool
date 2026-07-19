@@ -50,7 +50,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { setState } from "../core/state.js";
-import { formatSdiff, formatPercentage, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatPercentage, formatRelativeTime } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { emptyStateSpec } from "../components/empty-state.js";
@@ -178,9 +178,9 @@ function formatEntry(entry) {
     username: entry.username,
     workernameHref: buildHash("/workers/:workername", { workername: entry.workername }),
     workername: entry.workername,
-    currentBestLabel: formatSdiff(entry.currentDailyBest && entry.currentDailyBest.sdiff) || "--",
+    currentBestLabel: formatCompactSdiff(entry.currentDailyBest && entry.currentDailyBest.sdiff) || "--",
     previousBestLabel: entry.previousDailyBest
-      ? formatSdiff(entry.previousDailyBest.sdiff) || "--"
+      ? formatCompactSdiff(entry.previousDailyBest.sdiff) || "--"
       : "First best of the day",
     // A live-ticker entry always represents a new best, so a
     // meaningful improvement figure is always positive -- matching

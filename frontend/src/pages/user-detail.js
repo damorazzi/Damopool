@@ -27,7 +27,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatSdiff, formatPercentage, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatPercentage, formatRelativeTime } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -184,6 +184,11 @@ export function buildUserWindowsChartOption(rollingWindows, theme = {}) {
   };
 }
 
+// Feeds chartPanelSpec's `summary` prop -- accessible, screen-reader
+// text (docs/ARCHITECTURE.md Section 17), not the visible chart.
+// Deliberately full-precision formatSdiff, not formatCompactSdiff
+// (Phase E Milestone 25) -- see overview.js's buildPoolWindowsChartSummary
+// for the same reasoning and the same accidental-then-reverted history.
 export function buildUserWindowsChartSummary(rollingWindows) {
   const windows = rollingWindows || {};
   const parts = WINDOW_ORDER.map((key) => {
@@ -240,15 +245,15 @@ function statTilesSectionSpec(data) {
     children: [
       statTileSpec({
         label: "Current Daily Best",
-        value: formatSdiff(data.currentDailyBest && data.currentDailyBest.sdiff),
+        value: formatCompactSdiff(data.currentDailyBest && data.currentDailyBest.sdiff),
       }),
       statTileSpec({
         label: "Previous Daily Best",
-        value: formatSdiff(data.previousDailyBest && data.previousDailyBest.sdiff),
+        value: formatCompactSdiff(data.previousDailyBest && data.previousDailyBest.sdiff),
       }),
       statTileSpec({
         label: "Daily Improvement",
-        value: formatSdiff(data.improvementAmount),
+        value: formatCompactSdiff(data.improvementAmount),
         // Exactly 0% is deliberately excluded from both directions --
         // an unchanged daily best is not "up" (docs/DESIGN_SYSTEM.md
         // Section 10.5's trend indicator is for "a meaningful daily
@@ -264,10 +269,10 @@ function statTilesSectionSpec(data) {
       }),
       statTileSpec({ label: "Accepted Shares", value: formatCount(data.acceptedCount) }),
       statTileSpec({ label: "Rejected Shares", value: formatCount(data.rejectedCount) }),
-      statTileSpec({ label: "Average Sdiff", value: formatSdiff(data.averageSdiff) }),
+      statTileSpec({ label: "Average Sdiff", value: formatCompactSdiff(data.averageSdiff) }),
       statTileSpec({
         label: "Best Share Ever",
-        value: formatSdiff(data.bestShareEver && data.bestShareEver.sdiff),
+        value: formatCompactSdiff(data.bestShareEver && data.bestShareEver.sdiff),
       }),
     ],
   });

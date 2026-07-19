@@ -24,7 +24,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatSdiff, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatRelativeTime } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -133,6 +133,11 @@ export function buildWorkerWindowsChartOption(rollingWindows, theme = {}) {
   };
 }
 
+// Feeds chartPanelSpec's `summary` prop -- accessible, screen-reader
+// text (docs/ARCHITECTURE.md Section 17), not the visible chart.
+// Deliberately full-precision formatSdiff, not formatCompactSdiff
+// (Phase E Milestone 25) -- see overview.js's buildPoolWindowsChartSummary
+// for the same reasoning and the same accidental-then-reverted history.
 export function buildWorkerWindowsChartSummary(rollingWindows) {
   const windows = rollingWindows || {};
   const parts = WINDOW_ORDER.map((key) => {
@@ -176,17 +181,17 @@ function statTilesSectionSpec(data) {
       statTileSpec({ label: "Accepted Shares", value: formatCount(data.acceptedCount) }),
       statTileSpec({ label: "Rejected Shares", value: formatCount(data.rejectedCount) }),
       statTileSpec({ label: "Invalid Result Count", value: formatCount(data.invalidResultCount) }),
-      statTileSpec({ label: "Average Sdiff", value: formatSdiff(data.averageSdiff) }),
-      statTileSpec({ label: "Median Sdiff", value: formatSdiff(data.medianSdiff) }),
-      statTileSpec({ label: "Min Sdiff", value: formatSdiff(data.minSdiff) }),
-      statTileSpec({ label: "Max Sdiff", value: formatSdiff(data.maxSdiff) }),
+      statTileSpec({ label: "Average Sdiff", value: formatCompactSdiff(data.averageSdiff) }),
+      statTileSpec({ label: "Median Sdiff", value: formatCompactSdiff(data.medianSdiff) }),
+      statTileSpec({ label: "Min Sdiff", value: formatCompactSdiff(data.minSdiff) }),
+      statTileSpec({ label: "Max Sdiff", value: formatCompactSdiff(data.maxSdiff) }),
       statTileSpec({
         label: "Best Share Today",
-        value: formatSdiff(data.bestShareToday && data.bestShareToday.sdiff),
+        value: formatCompactSdiff(data.bestShareToday && data.bestShareToday.sdiff),
       }),
       statTileSpec({
         label: "Best Share Ever",
-        value: formatSdiff(data.bestShareEver && data.bestShareEver.sdiff),
+        value: formatCompactSdiff(data.bestShareEver && data.bestShareEver.sdiff),
       }),
     ],
   });

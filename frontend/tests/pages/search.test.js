@@ -11,6 +11,7 @@ import {
 } from "../../src/pages/search.js";
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
+import { truncateAddress } from "../../src/core/format.js";
 
 function fullPayload(overrides = {}) {
   return {
@@ -248,8 +249,14 @@ test("buildSearchSpec", async (t) => {
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
     const link = tbody.children[0].children[0].children[0];
-    assert.equal(link.text, raw);
+    assert.equal(
+      link.text,
+      truncateAddress(raw),
+      "the visible text is the truncated raw username, not the encoded one (Phase E Milestone 25 truncation is orthogonal to href encoding)",
+    );
     assert.equal(link.attrs.href, `#/users/${encodeURIComponent(raw)}`);
+    assert.equal(link.attrs.title, raw, "the full untruncated username stays available via title");
+    assert.equal(link.attrs["aria-label"], raw, "and via aria-label, for assistive tech that doesn't announce title");
   });
 
   await t.test("success + error (cached fallback) shows the error banner above the live content", () => {
@@ -267,14 +274,14 @@ test("buildSearchSpec", async (t) => {
     assert.equal(banner.children[0].className, "icon icon-warning error-banner__icon");
   });
 
-  await t.test("a malicious username passes through the result link as text, never markup", () => {
+  await t.test("a malicious username passes through the result link as text, never markup, even truncated", () => {
     const raw = "<img src=x onerror=alert(1)>";
     const data = transformSearchData(fullPayload({ users: { [raw]: { accepted_count: 1, workers: [] } } }));
     const spec = buildSearchSpec({ status: "success", data, error: null, isStale: false, searchQuery: raw });
     const table = findByClassName(spec, "data-table");
     const tbody = table.children.find((c) => c.tag === "tbody");
     const link = tbody.children[0].children[0].children[0];
-    assert.equal(link.text, raw);
+    assert.equal(link.text, truncateAddress(raw));
     assert.equal(link.tag, "a");
   });
 

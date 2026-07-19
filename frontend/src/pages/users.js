@@ -34,7 +34,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState } from "../core/state.js";
-import { formatSdiff, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatRelativeTime, truncateAddress } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { emptyStateSpec } from "../components/empty-state.js";
@@ -64,8 +64,17 @@ export const route = { pattern: "/users", name: "users" };
 // additive change: existing internal usage below is unaffected.
 export function usernameCellSpec(row) {
   return el("a", {
-    attrs: { href: buildHash("/users/:username", { username: row.username }) },
-    text: row.username,
+    attrs: {
+      href: buildHash("/users/:username", { username: row.username }),
+      // title alone is a weak affordance for the full value (not
+      // reliably announced by screen readers, no touch/mobile
+      // equivalent -- Code Review, Phase E Milestone 25) -- aria-label
+      // gives assistive tech the full username directly rather than
+      // the truncated visible text.
+      title: row.username,
+      "aria-label": row.username,
+    },
+    text: truncateAddress(row.username),
   });
 }
 
@@ -150,9 +159,9 @@ export function formatUserRow(row) {
     workerCount: formatCount(row.workerCount),
     accepted: formatCount(row.acceptedCount),
     rejected: formatCount(row.rejectedCount),
-    avgSdiff: formatSdiff(row.averageSdiff),
-    bestToday: formatSdiff(row.bestShareToday && row.bestShareToday.sdiff),
-    bestEver: formatSdiff(row.bestShareEver && row.bestShareEver.sdiff),
+    avgSdiff: formatCompactSdiff(row.averageSdiff),
+    bestToday: formatCompactSdiff(row.bestShareToday && row.bestShareToday.sdiff),
+    bestEver: formatCompactSdiff(row.bestShareEver && row.bestShareEver.sdiff),
   };
 }
 

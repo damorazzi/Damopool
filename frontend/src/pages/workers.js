@@ -22,7 +22,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState } from "../core/state.js";
-import { formatSdiff, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatRelativeTime, truncateWorkername } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { emptyStateSpec } from "../components/empty-state.js";
@@ -45,8 +45,17 @@ export const route = { pattern: "/workers", name: "workers" };
 // identical to users.js's own usernameCellSpec export.
 export function workernameCellSpec(row) {
   return el("a", {
-    attrs: { href: buildHash("/workers/:workername", { workername: row.workername }) },
-    text: row.workername,
+    attrs: {
+      href: buildHash("/workers/:workername", { workername: row.workername }),
+      // title alone is a weak affordance for the full value (not
+      // reliably announced by screen readers, no touch/mobile
+      // equivalent -- Code Review, Phase E Milestone 25) -- aria-label
+      // gives assistive tech the full workername directly rather than
+      // the truncated visible text.
+      title: row.workername,
+      "aria-label": row.workername,
+    },
+    text: truncateWorkername(row.workername),
   });
 }
 
@@ -146,9 +155,9 @@ export function formatWorkerRow(row) {
     lastShare: formatRelativeTime(row.lastShareAt),
     accepted: formatCount(row.acceptedCount),
     rejected: formatCount(row.rejectedCount),
-    avgSdiff: formatSdiff(row.averageSdiff),
-    bestToday: formatSdiff(row.bestShareToday && row.bestShareToday.sdiff),
-    bestEver: formatSdiff(row.bestShareEver && row.bestShareEver.sdiff),
+    avgSdiff: formatCompactSdiff(row.averageSdiff),
+    bestToday: formatCompactSdiff(row.bestShareToday && row.bestShareToday.sdiff),
+    bestEver: formatCompactSdiff(row.bestShareEver && row.bestShareEver.sdiff),
   };
 }
 

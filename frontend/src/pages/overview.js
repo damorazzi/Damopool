@@ -22,7 +22,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatSdiff, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatRelativeTime } from "../core/format.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
 import { emptyStateSpec } from "../components/empty-state.js";
@@ -145,6 +145,17 @@ export function buildPoolWindowsChartOption(rollingWindows, theme = {}) {
   };
 }
 
+// Feeds chartPanelSpec's `summary` prop -- the mandatory, visually-
+// hidden but screen-reader-read accessible text (docs/ARCHITECTURE.md
+// Section 17, chart-panel.js's own module comment), not the visible
+// chart itself. Deliberately kept on formatSdiff's full, precise,
+// comma-separated form rather than formatCompactSdiff's abbreviation
+// (Phase E Milestone 25) -- a spoken/read "eighty-two thousand, four
+// hundred ninety-three" is more useful here than "82.49K". This was
+// accidentally switched to formatCompactSdiff in the same milestone's
+// first pass (a blanket find-and-replace caught this function along
+// with the visible stat-tile values below, which correctly did
+// change) and reverted after Code Review caught the inconsistency.
 export function buildPoolWindowsChartSummary(rollingWindows) {
   const windows = rollingWindows || {};
   const parts = WINDOW_ORDER.map((key) => {
@@ -179,11 +190,11 @@ function statTilesSectionSpec(data) {
       statTileSpec({ label: "Rejected Shares", value: formatCount(data.rejectedCount) }),
       statTileSpec({
         label: "Best Share Today",
-        value: formatSdiff(data.bestShareToday && data.bestShareToday.sdiff),
+        value: formatCompactSdiff(data.bestShareToday && data.bestShareToday.sdiff),
       }),
       statTileSpec({
         label: "Best Share Ever",
-        value: formatSdiff(data.bestShareEver && data.bestShareEver.sdiff),
+        value: formatCompactSdiff(data.bestShareEver && data.bestShareEver.sdiff),
       }),
     ],
   });

@@ -33,7 +33,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatSdiff, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatRelativeTime } from "../core/format.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
 import { emptyStateSpec } from "../components/empty-state.js";
@@ -157,6 +157,11 @@ export function buildPercentilesChartOption(percentiles, theme = {}) {
   };
 }
 
+// Feeds chartPanelSpec's `summary` prop -- accessible, screen-reader
+// text (docs/ARCHITECTURE.md Section 17), not the visible chart.
+// Deliberately full-precision formatSdiff, not formatCompactSdiff
+// (Phase E Milestone 25) -- see overview.js's buildPoolWindowsChartSummary
+// for the same reasoning and the same accidental-then-reverted history.
 export function buildPercentilesChartSummary(percentiles) {
   const parts = PERCENTILE_ORDER.map((key) => {
     const value = percentiles && percentiles[key];
@@ -186,7 +191,7 @@ export function buildRollingWindowsRows(rollingWindows) {
       window: WINDOW_LABELS[key],
       accepted: w ? formatCount(w.accepted) : null,
       rejected: w ? formatCount(w.rejected) : null,
-      avgSdiff: formatSdiff(w && w.average_sdiff),
+      avgSdiff: formatCompactSdiff(w && w.average_sdiff),
       frequency: w ? formatRate(w.share_frequency_per_minute) : null,
     };
   });
@@ -203,10 +208,10 @@ function statTilesSectionSpec(data) {
       statTileSpec({ label: "Accepted Shares", value: formatCount(data.acceptedCount) }),
       statTileSpec({ label: "Rejected Shares", value: formatCount(data.rejectedCount) }),
       statTileSpec({ label: "Invalid Result Count", value: formatCount(data.invalidResultCount) }),
-      statTileSpec({ label: "Average Sdiff", value: formatSdiff(data.averageSdiff) }),
-      statTileSpec({ label: "Median Sdiff", value: formatSdiff(data.medianSdiff) }),
-      statTileSpec({ label: "Min Sdiff", value: formatSdiff(data.minSdiff) }),
-      statTileSpec({ label: "Max Sdiff", value: formatSdiff(data.maxSdiff) }),
+      statTileSpec({ label: "Average Sdiff", value: formatCompactSdiff(data.averageSdiff) }),
+      statTileSpec({ label: "Median Sdiff", value: formatCompactSdiff(data.medianSdiff) }),
+      statTileSpec({ label: "Min Sdiff", value: formatCompactSdiff(data.minSdiff) }),
+      statTileSpec({ label: "Max Sdiff", value: formatCompactSdiff(data.maxSdiff) }),
     ],
   });
 }
