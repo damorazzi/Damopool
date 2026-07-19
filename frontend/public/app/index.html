@@ -11,6 +11,15 @@
   <link rel="stylesheet" href="../../src/styles/layout.css">
   <link rel="stylesheet" href="../../src/shell/shell.css">
   <link rel="stylesheet" href="../../src/styles/components/data-table.css">
+  <!-- ECharts (docs/ARCHITECTURE.md Section 3.2/14): a classic, non-module
+       script so it executes synchronously during head parsing, guaranteeing
+       window.echarts exists before the deferred module script below runs --
+       charts/chart.js's createChart() expects it to already be present.
+       Same CDN URL already proven on the live production site. Deliberately
+       unpinned/no-SRI for now -- version pinning and an SRI hash are a
+       go-live-readiness item (Phase E), verified alongside real-browser
+       testing rather than in this integration-only milestone. -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
   <script>
     // Prevents a flash of the wrong theme (docs/ARCHITECTURE.md Section
     // 8) -- must run synchronously, before first paint, which rules out
