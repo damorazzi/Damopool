@@ -1,5 +1,38 @@
 # Project Log
 
+## 2026-07-19 (Milestone 21)
+
+- Began Phase E Milestone 21: Nginx `/analytics.json` alias -- the first Phase E infrastructure milestone, distinct in kind from every prior Phase E milestone (16-20), all of which were git-tracked frontend files. `/etc/nginx/sites-available/default` is a live, unversioned, root-owned production config file serving the real `damopool.xyz` site -- no `git diff`, no `git revert` possible for this change.
+- **One-off Infrastructure Scope Assessment, explicitly not a standing waiver:** the existing Phase E frontend waiver (2026-07-19, covers HTML/CSS/JS) does not apply -- Nginx config is infrastructure, not frontend. Neither Test Engineer (Python/sharelog-only charter) nor Code Reviewer (Python-only charter, and its Phase-E frontend extension explicitly excludes Nginx/cron per that waiver's own recorded text) covers this kind of change, and no standing infrastructure waiver was created or assumed -- this was authorized as a one-off, per-milestone Human approval, with an explicit review path substituted for the unavailable subagent reviews: documented investigation, an explicit proposed diff, direct Human review, Human-approved and Human-executed privileged commands, and independent read-only verification after each step.
+- **Approved block** (exact-match `location`, not the broader prefix form, per explicit Human amendment to the original proposal):
+  ```
+      # Location for analytics.json (Phase E Milestone 21)
+      location = /analytics.json {
+          alias /home/damopool/ckpool-solo/ckpool/analytics.json;
+          default_type application/json;
+
+          add_header Access-Control-Allow-Origin "*";
+          add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+          add_header Access-Control-Allow-Headers "Content-Type, Authorization";
+      }
+  ```
+  Mirrors the existing four JSON aliases (`/pool_stats`, `/historical_data`, `/config_history`, `/config_version_log`) exactly, per `docs/ARCHITECTURE.md` Section 15's own already-approved design ("mirroring the existing four JSON aliases exactly"), inserted immediately after `/config_version_log`'s closing brace and before the `# Logging` comment.
+- **Execution model:** the EM has no `sudo` access (confirmed: no passwordless `sudo`, no interactive terminal to supply a password, and no credential was ever requested or exposed in-conversation, consistent with `CLAUDE.md`'s Safety Rules). Every privileged command was run by the Human operator directly, one at a time, each preceded by the EM stating exactly what it would do and what result was expected, and followed by the EM independently re-verifying the result via a separate read-only check (never trusting a pasted claim alone) before proposing the next step. The insertion itself was done via the Human directly editing the live file (`sudo nano`) from a complete proposed-file draft the EM prepared and diffed against the live file beforehand (`diff` showing a clean, isolated 10-line insertion, nothing else touched) -- avoiding both an opaque automated text-replacement command against the live file and any risk of the Human mistyping a manually-relayed block.
+- **Operator-executed commands, in order:**
+  1. `sudo cp -p /etc/nginx/sites-available/default /etc/nginx/sites-available/default.bak-20260719-154425` -- backup, created before any edit.
+  2. `sudo nano /etc/nginx/sites-available/default` -- live edit, content taken from the EM's pre-diffed proposed file.
+  3. `sudo nginx -t` -- syntax test.
+  4. `sudo systemctl reload nginx` -- graceful reload (not `restart`) -- only run after step 3 passed.
+  5. `sudo nginx -T | grep -A 8 "analytics.json"` -- loaded-configuration verification.
+- **Backup path:** `/etc/nginx/sites-available/default.bak-20260719-154425`. Verified via independent `sha256sum` (not trusting the operator's pasted `ls` output alone) to exactly match the live file's checksum (`48bf6f24ed3a513981c447fec948bf6d581b9e6fa6924fb6c6d513ec7453331b`) both before the edit and, separately, again after the reload -- confirming the backup itself was never touched.
+- **Syntax-test result:** `nginx: the configuration file /etc/nginx/nginx.conf syntax is ok` / `test is successful` -- passed on the first attempt, no fix cycle needed.
+- **Reload result:** `sudo systemctl reload nginx` completed with no output (expected, silent-on-success). Independently confirmed via `systemctl status nginx`: `Active: active (running)` continuously since before the reload, with the `ExecReload` process itself logged as `code=exited, status=0/SUCCESS`, and new worker PIDs spawned under the same long-running master process -- the graceful-reload signature, no downtime.
+- **Loaded-configuration verification:** `sudo nginx -T | grep -A 8 "analytics.json"` returned the exact approved block, character-for-character -- proof the *running* nginx process has this configuration loaded, not merely that the file on disk was edited.
+- **Endpoint result:** `analytics.json` does not exist on disk in production yet (confirmed via `ls`, no scheduled generation exists until Milestone 22). `curl -I https://damopool.xyz/analytics.json` returned `404`, identical in every header to a `curl` against a deliberately-nonexistent path -- explicitly *not* treated as proof the alias works, exactly per the Human's own stated verification criteria, since a bare 404 can't distinguish "alias exists, file missing" from "no alias at all." The actual configuration proof for this milestone is the four items above (syntax test, reload, active status, loaded-config dump), all independently confirmed.
+- **Rollback procedure (not needed -- recorded for completeness):** `sudo cp -p /etc/nginx/sites-available/default.bak-20260719-154425 /etc/nginx/sites-available/default`, then `sudo nginx -t`, then `sudo systemctl reload nginx` only if that test passes.
+- **Limitation, explicitly carried forward:** the alias is live but non-functional until `analytics.json` actually exists at the aliased path on a regular basis -- scheduled generation (`analytics_builder.py` via cron/systemd) remains Milestone 22, not addressed here. Also carried forward from Milestone 19: no SRI hash/version pin on the ECharts CDN script; from Milestone 20: no real icon SVG set.
+- Not committed, not pushed -- per explicit instruction, awaiting Human review of both the live change and this documentation before either happens.
+
 ## 2026-07-19 (Milestone 20)
 
 - Began Phase E Milestone 20: Shared Component Completion, closing the "no `styles/components/*.css`" gap disclosed since Milestone 5. The brief named 4 components (`badge.css`, `search-box.css`, `ticker-feed.css`, `stat-tile.css`); a Mandatory Investigation before any code was written found **7 components have zero CSS, not 4** -- `empty-state.js`, `error-banner.js`, and `loading-skeleton.js` are actually used on all 9 pages, more broadly than any of the 4 named ones, so leaving them out would have been a materially incomplete "Shared Component Completion." No component was found unused; no page-specific CSS or inline styles exist anywhere to de-duplicate (confirmed by grep, consistent with `docs/DESIGN_SYSTEM.md` Section 1's "no page introduces its own one-off styling" already being honoured).
