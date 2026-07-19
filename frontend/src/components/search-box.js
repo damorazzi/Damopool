@@ -5,13 +5,8 @@
 // about; the page module that mounts it owns wiring the actual
 // 'input'/click listeners and deciding what a query does.
 //
-// No CSS yet (styles/components/search-box.css does not exist) --
-// same, already-disclosed gap as every shared component except
-// data-table.js, whose collapse behaviour was the one case where
-// missing CSS meant missing functionality, not just missing styling.
-// This component is fully functional and accessible without it.
-//
-// Section 10.2 also documents an `error` state (danger-coloured
+// styles/components/search-box.css (Phase E Milestone 20) styles the
+// base/focus states. Section 10.2 also documents an `error` state (danger-coloured
 // border plus helper text) and a `disabled` state (reduced opacity,
 // no focus response) -- neither is implemented here, the same
 // "add it when a page that actually needs it exists" deferral

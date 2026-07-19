@@ -8,10 +8,10 @@
 // component CSS can reference the "-text" token unconditionally for
 // text use and still be correct in both themes, with no
 // theme-conditional branch. The trend value is coloured text (Section
-// 4.3's 4.5:1 rule), so stat-tile.css (out of scope here) is expected
-// to colour .stat-tile__trend--up/--down with var(--color-success-text)
-// / var(--color-danger-text) directly -- that alias is what keeps this
-// function pure with no theme input needed.
+// 4.3's 4.5:1 rule), so stat-tile.css colours .stat-tile__trend--up/
+// --down with var(--color-success-text)/var(--color-danger-text)
+// directly -- that alias is what keeps this function pure with no
+// theme input needed.
 
 import { el } from "../core/dom.js";
 import { cardSpec } from "./card.js";

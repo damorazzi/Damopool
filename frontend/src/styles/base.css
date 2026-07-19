@@ -64,6 +64,38 @@ table {
   border-collapse: collapse;
 }
 
+/* docs/DESIGN_SYSTEM.md Section 8: icon sizing. Section 8 specifies
+   inline SVG icons; none exist yet (a disclosed gap since Milestone
+   5) -- every icon element in this project today is an empty
+   `<span class="icon icon-X" aria-hidden="true">` with no child
+   nodes at all (el()'s own textContent/appendChild-only construction
+   confirms no stray whitespace either, so :empty matches reliably).
+   Reserving icon-sized space unconditionally would leave a visible
+   blank hole wherever an icon is expected but not drawn, so :empty
+   collapses a placeholder with no rendered content to zero size. A
+   future icon implementation that adds a real child (Section 8's own
+   named "inline SVG icons" approach) stops matching :empty
+   automatically and inherits this sizing with no other component CSS
+   needing to change. (A hypothetical background-image/mask-image-only
+   icon with no DOM child would still match :empty and would need its
+   own override -- not the approach Section 8 names, so treated as an
+   unlikely future case rather than an unexamined gap.) Each
+   component's own icon class may override width/height where the
+   design system calls for a non-default size (e.g. empty-state's
+   --icon-size-lg); this rule only supplies the default. */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  flex-shrink: 0;
+}
+
+.icon:empty {
+  display: none;
+}
+
 /* Numeric values that should align in columns -- docs/DESIGN_SYSTEM.md
    Section 5: ordinary numeric stats use the base font with
    tabular-nums, not a separate monospace typeface. */

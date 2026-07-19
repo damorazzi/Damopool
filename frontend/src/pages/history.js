@@ -405,7 +405,23 @@ const CHART_DEFS = [
 function loadingSectionSpec() {
   return el("div", {
     className: "history-page__loading",
-    children: [loadingSkeletonSpec({ shape: "block", height: 280, count: CHART_DEFS.length })],
+    children: [
+      loadingSkeletonSpec({
+        shape: "block",
+        height: 280,
+        count: CHART_DEFS.length,
+        // Only grouped-"block" call site in the project -- the grouped-
+        // "tile" callers already have their own gap via className:
+        // "tile-grid", and grouped-"row" callers already have their own
+        // per-item margin-bottom (loading-skeleton.css). This modifier
+        // is what gives *this* group a gap without touching either of
+        // those already-correct cases (Code Reviewer caught a prior
+        // version of this fix incorrectly widening every row group's
+        // spacing by inferring "not tile-grid" instead of naming this
+        // one explicitly).
+        className: "loading-skeleton-group--stacked",
+      }),
+    ],
   });
 }
 

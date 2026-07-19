@@ -33,7 +33,13 @@ export function specToDom(spec) {
   }
 
   // textContent, never innerHTML -- the one enforcement point for
-  // docs/ARCHITECTURE.md Section 18.
+  // docs/ARCHITECTURE.md Section 18. Note for icon spans specifically
+  // (base.css's `.icon:empty { display: none }`, Phase E Milestone
+  // 20): any defined, non-null `text` -- including a falsy value like
+  // 0 -- produces a real text node here, so an icon-only element must
+  // never be given a `text` value, or it stops matching `:empty` and
+  // an unwanted glyph/character renders in what's meant to be an
+  // icon-only placeholder. No current call site does this.
   if (spec.text !== undefined && spec.text !== null) {
     node.textContent = spec.text;
   }

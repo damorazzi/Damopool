@@ -30,10 +30,9 @@
 // one-cycle fade/slide-in + glow-accent highlight Section 10.8
 // describes, via a single CSS class present only on the render where
 // the entry is new -- not a persistent state this component tracks
-// itself, since every render is already a fresh spec. No
-// `styles/components/ticker-feed.css` exists yet to actually implement
-// that animation, matching the same already-disclosed, not-yet-closed
-// gap as badge.js/search-box.js/stat-tile.js.
+// itself, since every render is already a fresh spec.
+// `styles/components/ticker-feed.css` (Phase E Milestone 20)
+// implements that animation.
 //
 // username/workername reach the DOM exclusively through el()'s `text`
 // field (specToDom -> textContent, never innerHTML) and `attrs.href`

@@ -1,0 +1,89 @@
+/* docs/DESIGN_SYSTEM.md Section 10.8: a vertical list of ticker
+   entries inside a Card. */
+
+.ticker-feed__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.ticker-feed__entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.ticker-feed__entry:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ticker-feed__identity {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.ticker-feed__bests {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.ticker-feed__current-best {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ticker-feed__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.ticker-feed__trend--up {
+  color: var(--color-success-text);
+}
+
+.ticker-feed__timestamp {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-inline-start: auto;
+}
+
+/* Section 9: one-cycle fade/slide-in + glow-accent highlight for a
+   newly-arrived entry. Uses --duration-slow/--ease-standard directly
+   (not hardcoded values) so tokens.css's own
+   `prefers-reduced-motion: reduce` rule -- which zeroes
+   --duration-slow to 0ms -- automatically collapses this to an
+   instant, no-motion appearance with no separate reduced-motion rule
+   needed here. This matches Section 9's own documented reduced-motion
+   behaviour for this exact case: "no transition at all for the ticker
+   entry." The glow itself is a static box-shadow while the modifier
+   class is present, not a separate animation -- ticker.js only
+   applies `--new` on the single render an entry is actually new (the
+   whole <li> is rebuilt fresh every render, so there is no persistent
+   node for a box-shadow *transition* to run against; the class simply
+   isn't present on the next render). */
+@keyframes ticker-entry-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ticker-feed__entry--new {
+  animation: ticker-entry-arrive var(--duration-slow) var(--ease-standard);
+  box-shadow: var(--glow-accent);
+  border-radius: var(--radius-md);
+}

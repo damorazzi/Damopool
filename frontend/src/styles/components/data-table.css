@@ -1,9 +1,10 @@
-/* docs/DESIGN_SYSTEM.md Section 10.4. This is the first file under
+/* docs/DESIGN_SYSTEM.md Section 10.4. This was the first file under
    styles/components/ -- every other shared component (Card, StatTile,
-   Badge, EmptyState, LoadingSkeleton, ErrorBanner, ChartPanel) still
-   has none, a known, already-tracked gap (PROJECT_LOG.md, Shared
-   Components / Overview milestones) that this file does not close.
-   DataTable is the one exception worth making now rather than later:
+   Badge, EmptyState, LoadingSkeleton, ErrorBanner, ChartPanel) then
+   had none, a known, already-tracked gap (PROJECT_LOG.md, Shared
+   Components / Overview milestones) that this file didn't close --
+   all of them got their own CSS in Milestones 18/20. DataTable was the
+   one exception worth making immediately, ahead of the rest:
    its defining architectural requirement -- collapsing to a stacked
    card per row below 768px (docs/ARCHITECTURE.md Section 12) -- is
    not a styling nicety layered on top of a working component, it is

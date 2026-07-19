@@ -1,0 +1,81 @@
+/* docs/DESIGN_SYSTEM.md Section 10.10: placeholder blocks sized to
+   roughly match their eventual real content, with a slow opacity
+   pulse. Duration derived from --duration-slow (Section 9) rather
+   than a hardcoded value, so tokens.css's own
+   `prefers-reduced-motion: reduce` rule (which zeroes --duration-slow
+   to 0ms) automatically stops the pulse for users who've asked for
+   reduced motion -- animation-duration: 0ms renders the keyframe
+   statically with no looping motion, verified directly in this
+   milestone's browser check rather than assumed. No separate
+   reduced-motion rule is needed here as a result. */
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.loading-skeleton {
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
+  animation: skeleton-pulse calc(var(--duration-slow) * 6) var(--ease-standard) infinite;
+}
+
+.loading-skeleton--tile {
+  width: 100%;
+  height: 84px;
+}
+
+.loading-skeleton--row {
+  width: 100%;
+  height: 48px;
+  margin-bottom: var(--space-3);
+}
+
+.loading-skeleton--row:last-child {
+  margin-bottom: 0;
+}
+
+.loading-skeleton--text {
+  width: 60%;
+  height: 1em;
+}
+
+.loading-skeleton--block {
+  width: 100%;
+  height: 80px;
+}
+
+/* loadingSkeletonSpec (loading-skeleton.js) wraps multiple placeholders
+   in a .loading-skeleton-group when count > 1. Three different grouped
+   shapes already exist in this project and each needs a DIFFERENT
+   spacing mechanism, not one shared rule:
+     - grouped "tile" (overview.js/pool.js/user-detail.js/worker-
+       detail.js) always passes className: "tile-grid" (layout.css),
+       whose own grid `gap` already spaces it correctly.
+     - grouped "row" (pool.js/users.js/workers.js/ticker.js/
+       user-detail.js/search.js) is already correctly spaced by
+       .loading-skeleton--row's own margin-bottom, above.
+     - grouped "block" (history.js only) has neither mechanism and,
+       without one, rendered with zero gap between its four
+       chart-loading placeholders -- a real defect found during Code
+       Review. history.js now passes its own explicit
+       className: "loading-skeleton-group--stacked" for this case,
+       matching the tile-grid case's own precedent of an explicit
+       opt-in marker rather than an inferred one.
+
+   An earlier version of this fix used `.loading-skeleton-group:not(
+   .tile-grid)` to target "everything that isn't a tile group,"
+   reasoned to be safe since only history.js's group lacked its own
+   className -- but that inference also matched every "row" group
+   (none of which pass a className either), stacking this rule's
+   `gap: var(--space-4)` (16px) on top of --row's own already-correct
+   margin-bottom (12px, flex gap does not collapse with item margins)
+   for a wrong ~28px total on six pages. Caught by Code Reviewer before
+   being signed off; replaced with this explicit, single-purpose class
+   so no other current or future grouped shape can be accidentally
+   matched by it. */
+.loading-skeleton-group--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}

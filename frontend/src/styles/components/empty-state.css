@@ -1,0 +1,28 @@
+/* docs/DESIGN_SYSTEM.md Section 10.10: centred icon plus a short
+   message, inside whatever card the real content would otherwise
+   occupy -- this component is not itself a Card (the caller keeps its
+   own), so it only needs its own internal centring, not a box model.
+   Flex column + gap means the collapsed (base.css's .icon:empty) icon
+   simply isn't there and the message centres alone -- still a
+   deliberate, readable empty state, not a broken layout. */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.empty-state__icon {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+  color: var(--color-text-secondary);
+}
+
+.empty-state__message {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}

@@ -1,0 +1,34 @@
+/* docs/DESIGN_SYSTEM.md Section 10.9: small pill, dot + label. Both
+   dots are non-text fills (Section 4.3), so the same colour values
+   apply in both themes -- no theme-conditional "-text" variant
+   needed, unlike text colour uses elsewhere in this project. */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+
+.badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.badge--success .badge__dot {
+  background: var(--color-success);
+}
+
+.badge--danger .badge__dot {
+  background: var(--color-danger);
+}
+
+.badge--neutral .badge__dot {
+  background: var(--color-text-secondary);
+}

@@ -8,7 +8,7 @@
 import { el } from "../core/dom.js";
 
 // Named shapes get a modifier class (loading-skeleton--tile etc.) so
-// skeleton.css (out of scope here) can size each one to match its real
+// loading-skeleton.css can size each one to match its real
 // counterpart without every call site repeating width/height.
 const SHAPES = ["tile", "row", "text", "block"];
 
