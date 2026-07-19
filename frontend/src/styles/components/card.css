@@ -1,0 +1,40 @@
+/* docs/DESIGN_SYSTEM.md Section 10.3: base container for most content.
+   Minimum scope for Phase E Milestone 18 (Chart Layout Foundation) --
+   chart-panel.js wraps every chart in a Card (docs/DESIGN_SYSTEM.md
+   Section 10.6), and a chart's rendered height depends on its card
+   ancestor having a real box model, not just chart-panel.css's own
+   canvas height rule. Scoped to exactly what every card (chart panels
+   included) needs: the `.card--highlight` glow-accent variant
+   (Section 10.3, Section 7) is deliberately out of scope here -- none
+   of the five chart-bearing pages use it, and it is reserved for a
+   small, separate set of moments (today's best share, a new ticker
+   entry) unrelated to chart layout. */
+
+.card {
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+/* card.js always emits a .card__body wrapper around a card's children --
+   deliberately no rule here: it's a plain content box, box-sizing:
+   border-box (base.css) already prevents any width/padding surprise,
+   and every card's actual look comes from .card itself plus whatever
+   the content (e.g. .chart-panel__canvas) supplies. */
+
+.card__header {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-color);
+}
+
+.card__footer {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-color);
+}

@@ -1,0 +1,39 @@
+/* docs/DESIGN_SYSTEM.md Section 10.6: a Card wrapping an ECharts
+   instance. Minimum scope for Phase E Milestone 18 -- gives the chart
+   container a real, responsive height so charts/chart.js's
+   createChart() (which sizes the ECharts canvas to this container's
+   own clientWidth/clientHeight at init time) has something non-zero
+   to size against. Before this file existed, ECharts initialized
+   successfully into a 0-height container and painted nothing, with no
+   error thrown anywhere -- see PROJECT_LOG.md's Milestone 17 finding.
+
+   position: relative gives ECharts' internally absolutely-positioned
+   canvas layer an explicit containing block, rather than relying on
+   ECharts' own defensive same-effect fallback. Height steps up at this
+   project's existing layout breakpoints (tokens.css's
+   --breakpoint-md/--breakpoint-lg, mirrored here as literal media
+   query values per layout.css's own established convention -- custom
+   properties can't be used inside @media conditions) rather than
+   scaling continuously with width, so a chart never grows unreasonably
+   tall on a very wide viewport. Width needs no rule here: it already
+   fills the container correctly via the normal block-level 100%
+   default, confirmed by Milestone 17's own browser measurement (the
+   container was 1280px wide and 0px tall -- only height was missing). */
+
+.chart-panel__canvas {
+  position: relative;
+  width: 100%;
+  height: 260px;
+}
+
+@media (min-width: 768px) {
+  .chart-panel__canvas {
+    height: 320px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .chart-panel__canvas {
+    height: 380px;
+  }
+}

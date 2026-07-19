@@ -191,4 +191,9 @@ test("public/app/index.html", async (t) => {
     assert.match(html, /import\s*\{\s*bootstrap\s*\}\s*from\s*"\.\.\/\.\.\/src\/app\.js"/);
     assert.match(html, /bootstrap\(\);/);
   });
+
+  await t.test("loads card.css and chart-panel.css (Phase E Milestone 18: without these, chart-panel.js's canvas container has no rendered height)", () => {
+    assert.match(html, /<link rel="stylesheet" href="\.\.\/\.\.\/src\/styles\/components\/card\.css">/);
+    assert.match(html, /<link rel="stylesheet" href="\.\.\/\.\.\/src\/styles\/components\/chart-panel\.css">/);
+  });
 });
