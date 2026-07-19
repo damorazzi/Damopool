@@ -24,11 +24,22 @@
        script so it executes synchronously during head parsing, guaranteeing
        window.echarts exists before the deferred module script below runs --
        charts/chart.js's createChart() expects it to already be present.
-       Same CDN URL already proven on the live production site. Deliberately
-       unpinned/no-SRI for now -- version pinning and an SRI hash are a
-       go-live-readiness item (Phase E), verified alongside real-browser
-       testing rather than in this integration-only milestone. -->
-  <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+       Pinned to 6.1.0 (Phase E Milestone 24) -- the exact version every
+       browser test throughout Milestones 16-23 has already run against,
+       not a surprise newer release picked at pin time. SRI hash computed
+       directly from the downloaded pinned-version bytes (sha384, openssl
+       dgst), independently cross-confirmed against the same file
+       extracted from the actual npm registry tarball -- a source
+       independent of the CDN, not just self-consistency against
+       jsdelivr alone. crossorigin="anonymous" is required for a
+       cross-origin script with integrity set: without it, the request
+       runs in no-cors mode and the browser refuses to execute the
+       script at all (fails closed) rather than silently skipping the
+       integrity check and running it anyway (which omitting it does
+       NOT do -- this is not a low-risk shortcut to leave off). -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"
+          integrity="sha384-C2iskrW/uPW46KzOjrvJIQo4YkV8lkD+QS0CrDN18IIPIpT/g2USu8bTP3nvmIAD"
+          crossorigin="anonymous"></script>
   <script>
     // Prevents a flash of the wrong theme (docs/ARCHITECTURE.md Section
     // 8) -- must run synchronously, before first paint, which rules out

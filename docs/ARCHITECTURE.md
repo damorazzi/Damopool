@@ -87,8 +87,9 @@ it.
 **Why:** it is already proven in production on the current site, it is
 capable, and swapping it for another library would be a dependency change
 with no functional justification — the opposite of the "avoid unnecessary
-dependencies" principle. It is loaded via CDN today; Section 18 addresses
-the integrity/versioning follow-up that deserves attention before go-live.
+dependencies" principle. It is loaded via CDN, pinned to an exact version
+with a Subresource Integrity hash as of Phase E Milestone 24; Section 18
+records that resolution.
 
 ### 3.3 No build step in v1, but a build-ready structure
 
@@ -495,12 +496,13 @@ site; keeping them as separate components is this architecture's fix.
   unauthenticated by design, matching the current site's pattern.
   Publishing usernames is not expected to be a new disclosure in the
   typical solo-CKPool case, where a username is a BTC payout address
-  already public on-chain — but this is a domain assumption, not verified
-  against this project's actual user base, and it does not fully account
-  for the fact that publishing real-time performance data linked to a
-  specific address is itself a form of disclosure beyond the bare address
-  existing on-chain. This deserves a deliberate decision before Phase D
-  go-live, not an assumption carried through unexamined.
+  already public on-chain. **Decision (Phase E Milestone 24, Human
+  Decision Required item resolved):** publishing real-time performance
+  data linked to that address is acceptable as-is, no mitigation
+  required before go-live — the domain assumption above is confirmed
+  against this project's actual user base, not left as an unverified
+  carry-through. This was a deliberate Human decision, not an
+  Engineering Manager assumption.
 - `username` and `workername` are both free text. `username` is
   conventionally a BTC payout address, but nothing in the backend
   (`is_valid_username` / `is_valid_workername` in `user_statistics.py` /
@@ -516,9 +518,31 @@ site; keeping them as separate components is this architecture's fix.
   the architecture (Section 6/7) — this is what makes adopting a strict
   Content-Security-Policy in Phase D a config addition rather than a
   rewrite.
-- The ECharts CDN script and the existing Google Analytics tag are the
-  only third-party scripts; both should get a Subresource Integrity hash
-  in Phase D (currently absent on the live site).
+- The ECharts CDN script is the dashboard app's only third-party script
+  (the Google Analytics tag exists only on the old, not-yet-cutover live
+  site, `/var/www/html/index.html` — not this architecture's own entry
+  point). Pinned to an exact version (`6.1.0`) with a Subresource
+  Integrity hash in Phase E Milestone 24 (`sha384`, computed directly from
+  the pinned version's actual bytes, independently cross-confirmed
+  against both the browser's own SRI-mismatch error reporting its
+  computed hash and the same file extracted from the actual npm registry
+  tarball — a source independent of the CDN itself, ruling out a
+  CDN-specific tampered build rather than only checking self-consistency
+  against jsdelivr alone).
+- **Deliberate trade-off, not an oversight (matching this document's own
+  convention, e.g. Sections 3.3/20/21):** pinning inverts the previous
+  risk. Unpinned `latest` meant the dashboard silently received upstream
+  ECharts updates, unverified but always current; pinned means it will
+  now silently stay on `6.1.0` indefinitely — including through any
+  future disclosed ECharts vulnerability — until someone notices and
+  manually repeats the version-bump process (resolve the new version,
+  diff/hash it the same way, re-verify in a real browser, and update the
+  script tag, its own comment, and this section). No automated dependency
+  update or CVE-monitoring process exists for this or any other
+  dependency in the project; at this project's current scale (one
+  third-party script, one operator) that is judged acceptable, but it is
+  recorded here as a real, accepted limitation rather than left
+  implicit.
 - Future authenticated areas (admin, miner management) are out of scope
   for Feature 007 but the single fetch boundary (Section 15) means adding
   auth headers later touches one file, not every page.

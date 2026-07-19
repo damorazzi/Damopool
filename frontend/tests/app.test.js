@@ -202,6 +202,13 @@ test("public/app/index.html", async (t) => {
     assert.match(html, /<link rel="stylesheet" href="\.\.\/\.\.\/src\/styles\/components\/card\.css">/);
     assert.match(html, /<link rel="stylesheet" href="\.\.\/\.\.\/src\/styles\/components\/chart-panel\.css">/);
   });
+
+  await t.test("ECharts is loaded pinned to an exact version with a matching SRI hash and crossorigin (Phase E Milestone 24) -- catches a future accidental revert to the unpinned URL, a version/hash mismatch, or a dropped crossorigin attribute (which would silently fail the script load entirely, not just skip integrity checking)", () => {
+    assert.match(
+      html,
+      /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/echarts@6\.1\.0\/dist\/echarts\.min\.js"\s*\n\s*integrity="sha384-C2iskrW\/uPW46KzOjrvJIQo4YkV8lkD\+QS0CrDN18IIPIpT\/g2USu8bTP3nvmIAD"\s*\n\s*crossorigin="anonymous"><\/script>/,
+    );
+  });
 });
 
 test("Phase E Milestone 23: polling cadence constants", async (t) => {
