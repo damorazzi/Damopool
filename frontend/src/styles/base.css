@@ -28,6 +28,17 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
+  /* Phase E Milestone 19: user-detail.js/worker-detail.js interpolate a
+     raw, untrusted username/workername (docs/ARCHITECTURE.md Section
+     18: free text, no charset restriction, can be arbitrarily long
+     with no whitespace) directly into a heading. Without this, a long
+     unbroken address can't wrap and overflows the viewport at narrow
+     widths. `anywhere` (not break-all) only breaks a word when it
+     would otherwise overflow, and unlike `break-word` it also counts
+     toward the box's min-content size, so a heading correctly
+     contributes a small minimum width to any ancestor sizing
+     calculation instead of an unbreakable one. */
+  overflow-wrap: anywhere;
 }
 
 a {

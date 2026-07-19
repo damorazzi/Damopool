@@ -27,6 +27,27 @@
   gap: var(--space-5);
 }
 
+/* Phase E Milestone 19: without this, a grid item's default
+   min-width:auto means it won't shrink below its content's
+   min-content size -- a DataTable's own overflow-x:auto (data-
+   table.css) can't compensate because it sits below the actual grid
+   item, and the min-content-zeroing effect of overflow:auto only
+   applies at the item's own level, not a descendant's. This let a
+   wide table force the whole 1fr track (and the page) wider than the
+   viewport at <1024px, single-column widths.
+
+   Applies to BOTH split-layout children, not just the table-bearing
+   one -- .card itself has overflow:visible (card.css), so this is the
+   only floor-removal point available. A future child with its own
+   unbreakable wide content (a long value with no overflow-wrap, an
+   unwrapped badge row) would need its own overflow handling, the same
+   way data-table-wrap and base.css's heading overflow-wrap already
+   provide it for today's two children -- this rule alone doesn't
+   guarantee that for content that doesn't exist yet. */
+.split-layout > * {
+  min-inline-size: 0;
+}
+
 /* Small tablet: 480-768px */
 @media (min-width: 480px) {
   .page-container {
