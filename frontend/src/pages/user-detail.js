@@ -27,7 +27,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatSdiff, formatPercentage, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatPercentage, formatRelativeTime, truncateAddress } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -39,6 +39,7 @@ import { dataTableSpec } from "../components/data-table.js";
 import { badgeSpec } from "../components/badge.js";
 import { createChart } from "../charts/chart.js";
 import { buildEChartsTheme, readThemeTokens } from "../charts/theme-echarts.js";
+import { workernameCellSpec } from "./workers.js";
 
 const ANALYTICS_ENDPOINT = "/analytics.json";
 
@@ -48,7 +49,7 @@ const WINDOW_ORDER = ["15m", "1h", "24h"];
 const WINDOW_LABELS = { "15m": "15 min", "1h": "1 hour", "24h": "24 hours" };
 
 const WORKER_COLUMNS = [
-  { key: "workername", label: "Workername", mono: true },
+  { key: "workername", label: "Workername", mono: true, render: workernameCellSpec },
   { key: "status", label: "Status", render: (row) => badgeSpec({ variant: row.isActive ? "active" : "inactive" }) },
   { key: "lastShare", label: "Last Share", align: "right" },
   { key: "accepted", label: "Accepted", align: "right" },
@@ -234,7 +235,11 @@ function headerSpec(username) {
         attrs: { href: buildHash("/users") },
         text: "← Back to Users",
       }),
-      el("h1", { className: "user-detail-page__title", text: `User: ${username}` }),
+      el("h1", {
+        className: "user-detail-page__title",
+        attrs: { title: username, "aria-label": `User: ${username}` },
+        text: `User: ${truncateAddress(username)}`,
+      }),
     ],
   });
 }
@@ -337,7 +342,7 @@ export function buildUserDetailSpec(state) {
         headerSpec(state.username),
         ...banners,
         cardSpec({
-          children: [emptyStateSpec({ message: `No data found for user "${state.username}".` })],
+          children: [emptyStateSpec({ message: `No data found for user "${truncateAddress(state.username)}".` })],
         }),
       ],
     });

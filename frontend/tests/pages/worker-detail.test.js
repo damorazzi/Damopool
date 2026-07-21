@@ -12,6 +12,7 @@ import {
 } from "../../src/pages/worker-detail.js";
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
+import { truncateWorkername } from "../../src/core/format.js";
 
 function fullPayload(overrides = {}) {
   return {
@@ -192,7 +193,7 @@ test("buildWorkerDetailSpec", async (t) => {
     });
     assert.ok(findByClassName(spec, "empty-state"));
     const message = findByClassName(spec, "empty-state__message");
-    assert.match(message.text, /nonexistent/);
+    assert.ok(message.text.includes(truncateWorkername("nonexistent")));
   });
 
   await t.test("success renders the back-link, all 13 stat tiles, and the chart -- no DataTable/split-layout", () => {
@@ -249,8 +250,10 @@ test("buildWorkerDetailSpec", async (t) => {
     const raw = "<img src=x onerror=alert(1)>";
     const spec = buildWorkerDetailSpec({ status: "loading", workername: raw });
     const heading = findByClassName(spec, "worker-detail-page__title");
-    assert.equal(heading.text, `Worker: ${raw}`);
+    assert.equal(heading.text, `Worker: ${truncateWorkername(raw)}`);
     assert.equal(heading.tag, "h1");
+    assert.equal(heading.attrs.title, raw);
+    assert.equal(heading.attrs["aria-label"], `Worker: ${raw}`);
   });
 });
 

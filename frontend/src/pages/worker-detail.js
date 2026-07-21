@@ -24,7 +24,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatSdiff, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatRelativeTime, truncateWorkername } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -165,7 +165,11 @@ function headerSpec(workername) {
         attrs: { href: buildHash("/workers") },
         text: "← Back to Workers",
       }),
-      el("h1", { className: "worker-detail-page__title", text: `Worker: ${workername}` }),
+      el("h1", {
+        className: "worker-detail-page__title",
+        attrs: { title: workername, "aria-label": `Worker: ${workername}` },
+        text: `Worker: ${truncateWorkername(workername)}`,
+      }),
     ],
   });
 }
@@ -239,7 +243,7 @@ export function buildWorkerDetailSpec(state) {
         headerSpec(state.workername),
         ...banners,
         cardSpec({
-          children: [emptyStateSpec({ message: `No data found for worker "${state.workername}".` })],
+          children: [emptyStateSpec({ message: `No data found for worker "${truncateWorkername(state.workername)}".` })],
         }),
       ],
     });

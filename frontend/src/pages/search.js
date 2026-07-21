@@ -209,6 +209,12 @@ export function buildSearchSpec(state) {
       children: [emptyStateSpec({ message: "Type a username or workername to search." })],
     });
   } else if (results.userResults.length === 0 && results.workerResults.length === 0) {
+    // Deliberately not truncated (Phase E username/workername truncation
+    // pass, PROJECT_LOG.md): `query` is the visitor's own typed search
+    // text, not a username/workername identifier being displayed back --
+    // truncating what someone just typed would hide it from them, which
+    // is a different concern than shortening a long BTC address in a
+    // table or heading.
     content = cardSpec({
       children: [emptyStateSpec({ message: `No matches found for "${query.trim()}".` })],
     });

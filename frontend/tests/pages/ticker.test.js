@@ -14,6 +14,7 @@ import {
 } from "../../src/pages/ticker.js";
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
+import { truncateAddress, truncateWorkername } from "../../src/core/format.js";
 
 function fullPayload(overrides = {}) {
   return {
@@ -368,6 +369,38 @@ test("buildTickerSpec", async (t) => {
     assert.equal(bobTrend, undefined, "no improvement_percentage means no trend rendered at all");
   });
 
+  await t.test("a long username/workername is truncated for display, with the full value preserved via href/title/aria-label (Phase E Milestone 26)", () => {
+    const username = "bc1qmleyaz5gj0fxsayvk7mrgfcx8rel0qnscwnm88";
+    const workername = "bc1qmleyaz5gj0fxsayvk7mrgfcx8rel0qnscwnm88.OctaxeDamo";
+    const payload = fullPayload();
+    payload.live_ticker = [
+      {
+        username,
+        workername,
+        current_daily_best: { sdiff: 1, timestamp: new Date().toISOString() },
+        previous_daily_best: null,
+        improvement_amount: null,
+        improvement_percentage: null,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+    const data = markNewEntriesData(transformTickerData(payload));
+    const spec = buildTickerSpec({ status: "success", data, error: null, isStale: false });
+    const entries = findAllByClassName(spec, "ticker-feed__entry");
+    const identityDiv = entries[0].children.find((c) => (c.className || "").includes("ticker-feed__identity"));
+    const [usernameLink, workernameLink] = identityDiv.children;
+
+    assert.equal(usernameLink.text, truncateAddress(username));
+    assert.equal(usernameLink.attrs.href, `#/users/${encodeURIComponent(username)}`, "href is unaffected by truncation");
+    assert.equal(usernameLink.attrs.title, username);
+    assert.equal(usernameLink.attrs["aria-label"], username);
+
+    assert.equal(workernameLink.text, truncateWorkername(workername), "only the address portion truncates, the worker label stays readable");
+    assert.equal(workernameLink.attrs.href, `#/workers/${encodeURIComponent(workername)}`);
+    assert.equal(workernameLink.attrs.title, workername);
+    assert.equal(workernameLink.attrs["aria-label"], workername);
+  });
+
   await t.test("an entry marked isNew renders the --new modifier class; others do not", () => {
     const data = transformTickerData(fullPayload());
     data.entries = markNewEntries(data.entries, new Set([tickerEntryKey(data.entries[1])]));
@@ -391,7 +424,7 @@ test("buildTickerSpec", async (t) => {
     assert.equal(list.attrs["aria-live"], undefined, "the list is rebuilt every render and is not a reliable live-region host");
   });
 
-  await t.test("a malicious username/workername passes through as link text, never markup", () => {
+  await t.test("a malicious username/workername passes through as link text, never markup, even truncated", () => {
     const raw = "<img src=x onerror=alert(1)>";
     const payload = fullPayload();
     payload.live_ticker = [
@@ -409,11 +442,15 @@ test("buildTickerSpec", async (t) => {
     const spec = buildTickerSpec({ status: "success", data, error: null, isStale: false });
     const entries = findAllByClassName(spec, "ticker-feed__entry");
     const identity = entryIdentity(entries[0]);
-    assert.equal(identity.username, raw);
-    assert.equal(identity.workername, raw);
+    assert.equal(identity.username, truncateAddress(raw));
+    assert.equal(identity.workername, truncateWorkername(raw));
     const identityDiv = entries[0].children.find((c) => (c.className || "").includes("ticker-feed__identity"));
     assert.equal(identityDiv.children[0].tag, "a");
     assert.equal(identityDiv.children[1].tag, "a");
+    assert.equal(identityDiv.children[0].attrs.title, raw, "the full untruncated username stays available via title");
+    assert.equal(identityDiv.children[0].attrs["aria-label"], raw);
+    assert.equal(identityDiv.children[1].attrs.title, raw, "the full untruncated workername stays available via title");
+    assert.equal(identityDiv.children[1].attrs["aria-label"], raw);
   });
 });
 

@@ -13,6 +13,7 @@ import {
 } from "../../src/pages/user-detail.js";
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
+import { truncateAddress, truncateWorkername } from "../../src/core/format.js";
 
 function fullPayload(overrides = {}) {
   return {
@@ -282,7 +283,7 @@ test("buildUserDetailSpec", async (t) => {
     });
     assert.ok(findByClassName(spec, "empty-state"));
     const message = findByClassName(spec, "empty-state__message");
-    assert.match(message.text, /nonexistent/);
+    assert.ok(message.text.includes(truncateAddress("nonexistent")));
   });
 
   await t.test("success renders the back-link, stat tiles (including the daily-improvement trend), the worker table, and the chart", () => {
@@ -305,6 +306,23 @@ test("buildUserDetailSpec", async (t) => {
     assert.ok(findByClassName(spec, "data-table"));
     assert.ok(findByClassName(spec, "chart-panel"));
     assert.equal(findByClassName(spec, "error-banner"), null);
+  });
+
+  await t.test("the worker table's workername cell reuses workernameCellSpec: truncated text, full value via title/aria-label, correct link", () => {
+    const raw = "bc1qmleyaz5gj0fxsayvk7mrgfcx8rel0qnscwnm88.OctaxeDamo";
+    const data = transformUserDetailData(
+      fullPayload({ aliceRecord: { workers: [raw] }, workers: { [raw]: { is_active: true, accepted_count: 1, last_share_at: null } } }),
+      "alice",
+    );
+    const spec = buildUserDetailSpec({ status: "success", data, username: "alice", error: null, isStale: false });
+    const table = findByClassName(spec, "data-table");
+    const tbody = table.children.find((c) => c.tag === "tbody");
+    const link = tbody.children[0].children[0].children[0];
+    assert.equal(link.tag, "a");
+    assert.equal(link.text, truncateWorkername(raw));
+    assert.equal(link.attrs.href, `#/workers/${encodeURIComponent(raw)}`);
+    assert.equal(link.attrs.title, raw, "the full untruncated workername stays available via title");
+    assert.equal(link.attrs["aria-label"], raw, "and via aria-label, for assistive tech that doesn't announce title");
   });
 
   await t.test("a negative improvement_percentage renders the 'down' trend", () => {
@@ -369,8 +387,10 @@ test("buildUserDetailSpec", async (t) => {
     const raw = "<img src=x onerror=alert(1)>";
     const spec = buildUserDetailSpec({ status: "loading", username: raw });
     const heading = findByClassName(spec, "user-detail-page__title");
-    assert.equal(heading.text, `User: ${raw}`);
+    assert.equal(heading.text, `User: ${truncateAddress(raw)}`);
     assert.equal(heading.tag, "h1");
+    assert.equal(heading.attrs.title, raw);
+    assert.equal(heading.attrs["aria-label"], `User: ${raw}`);
   });
 });
 

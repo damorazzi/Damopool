@@ -45,9 +45,16 @@
 // without it there would be no way to tell which pool user a given
 // entry belongs to -- a deliberate, necessary extension of the spec,
 // not an unexamined addition.
+//
+// Truncated the same way as users.js's/workers.js's own list-page cell
+// specs (Phase E Milestone 25/26) -- href stays built from the full
+// value (unaffected), and title/aria-label carry the full value for
+// hover/assistive-tech access, matching that established pattern
+// exactly rather than inventing a different one for this page.
 
 import { el } from "../core/dom.js";
 import { cardSpec } from "./card.js";
+import { truncateAddress, truncateWorkername } from "../core/format.js";
 
 function entrySpec(entry) {
   const classes = ["ticker-feed__entry"];
@@ -71,13 +78,13 @@ function entrySpec(entry) {
         children: [
           el("a", {
             className: "ticker-feed__username mono",
-            attrs: { href: entry.usernameHref },
-            text: entry.username,
+            attrs: { href: entry.usernameHref, title: entry.username, "aria-label": entry.username },
+            text: truncateAddress(entry.username),
           }),
           el("a", {
             className: "ticker-feed__workername mono",
-            attrs: { href: entry.workernameHref },
-            text: entry.workername,
+            attrs: { href: entry.workernameHref, title: entry.workername, "aria-label": entry.workername },
+            text: truncateWorkername(entry.workername),
           }),
         ],
       }),
