@@ -7,8 +7,12 @@ from datetime import datetime, timedelta, timezone
 
 from parse_share_analytics import LOGS_DIR, find_sharelog_files
 import analytics_state
+import ckpool_native_stats
 
-SCHEMA_VERSION = "1.1"
+# Phase E Milestone 28: additive, backward-compatible schema change (two
+# new hashrate_1m/hashrate_24h fields on pool/users/workers) -- bumped the
+# minor version per this project's own versioning discipline.
+SCHEMA_VERSION = "1.2"
 GENERATOR = "analytics_builder.py"
 ANALYTICS_OUTPUT_PATH = "/home/damopool/ckpool-solo/ckpool/analytics.json"
 
@@ -31,6 +35,28 @@ def build_analytics(logs_dir=None, now=None, state_path=None):
 
     source_files = find_sharelog_files(logs_dir)
 
+    # Milestone 28: CKPool's own native hashrate figures, read and merged
+    # in here rather than inside analytics_state.py -- deliberately kept
+    # separate from that module's sharelog-incremental engine (see
+    # ckpool_native_stats.py's own module comment for why). Merged only
+    # into users/workers analytics_state.py already produced from
+    # sharelog data -- a native file with no sharelog-derived counterpart
+    # (implausible in practice, but not assumed impossible) contributes no
+    # phantom user/worker entry of its own.
+    native = ckpool_native_stats.read_native_hashrates(logs_dir)
+
+    pool_out = {**merged["pool"], **native["pool"]}
+
+    users_out = {}
+    for username, record in merged["users"].items():
+        user_native = native["users"].get(username, {"hashrate_1m": None, "hashrate_24h": None})
+        users_out[username] = {**record, **user_native}
+
+    workers_out = {}
+    for workername, record in merged["workers"].items():
+        worker_native = native["workers"].get(workername, {"hashrate_1m": None, "hashrate_24h": None})
+        workers_out[workername] = {**record, **worker_native}
+
     metadata = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.isoformat(),
@@ -42,9 +68,9 @@ def build_analytics(logs_dir=None, now=None, state_path=None):
 
     return {
         "metadata": metadata,
-        "pool": merged["pool"],
-        "users": merged["users"],
-        "workers": merged["workers"],
+        "pool": pool_out,
+        "users": users_out,
+        "workers": workers_out,
         "daily_bests": merged["daily_bests"],
         "live_ticker": merged["live_ticker"],
     }

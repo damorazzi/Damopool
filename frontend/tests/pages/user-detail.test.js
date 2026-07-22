@@ -31,6 +31,8 @@ function fullPayload(overrides = {}) {
           "1h": { accepted: 40, rejected: 1, average_sdiff: 120, share_frequency_per_minute: 0.6 },
           "24h": { accepted: 900, rejected: 4, average_sdiff: 110, share_frequency_per_minute: 0.6 },
         },
+        hashrate_1m: 11200000000000,
+        hashrate_24h: 10400000000000,
         ...overrides.aliceRecord,
       },
       ...overrides.users,
@@ -100,6 +102,18 @@ test("transformUserDetailData", async (t) => {
     assert.equal(data.previousDailyBest.sdiff, 400);
     assert.equal(data.improvementAmount, 112.5);
     assert.equal(data.improvementPercentage, 28.1);
+  });
+
+  await t.test("Phase E Milestone 28: extracts hashrate_1m/hashrate_24h as hashrate1m/hashrate24h", () => {
+    const data = transformUserDetailData(fullPayload(), "alice");
+    assert.equal(data.hashrate1m, 11200000000000);
+    assert.equal(data.hashrate24h, 10400000000000);
+  });
+
+  await t.test("missing native hashrate fields pass through as undefined, not a throw", () => {
+    const data = transformUserDetailData(fullPayload({ aliceRecord: { hashrate_1m: undefined, hashrate_24h: undefined } }), "alice");
+    assert.equal(data.hashrate1m, undefined);
+    assert.equal(data.hashrate24h, undefined);
   });
 
   await t.test("returns null when the username has no record at all -- the not-found signal", () => {
@@ -266,6 +280,19 @@ test("buildUserDetailSpec", async (t) => {
     assert.equal(findByClassName(spec, "chart-panel"), null);
   });
 
+  await t.test("Code Review finding (Milestone 28): loading-skeleton tile count matches the real success-state tile count, so there is no layout shift when data arrives", () => {
+    const loadingTileCount = findByClassName(
+      buildUserDetailSpec({ status: "loading", username: "alice" }),
+      "tile-grid",
+    ).children.length;
+    const data = transformUserDetailData(fullPayload(), "alice");
+    const successTileCount = findByClassName(
+      buildUserDetailSpec({ status: "success", data, username: "alice", error: null, isStale: false }),
+      "tile-grid",
+    ).children.length;
+    assert.equal(loadingTileCount, successTileCount);
+  });
+
   await t.test("error state (no data) renders the header and only the error banner", () => {
     const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" });
     const spec = buildUserDetailSpec({ status: "error", data: null, username: "alice", error, isStale: false });
@@ -294,7 +321,7 @@ test("buildUserDetailSpec", async (t) => {
     assert.equal(backLink.attrs.href, "#/users");
 
     const tileGrid = findByClassName(spec, "tile-grid");
-    assert.equal(tileGrid.children.length, 7);
+    assert.equal(tileGrid.children.length, 9);
 
     // "Daily Improvement" is the third tile; its trend direction/label
     // must reflect a positive improvement_percentage.
@@ -306,6 +333,26 @@ test("buildUserDetailSpec", async (t) => {
     assert.ok(findByClassName(spec, "data-table"));
     assert.ok(findByClassName(spec, "chart-panel"));
     assert.equal(findByClassName(spec, "error-banner"), null);
+  });
+
+  await t.test("Phase E Milestone 28 (Human's clarification: individual User Detail, not the Users table): Pool User Hashrate (1m)/(24h) tiles render with compact-formatted values", () => {
+    const data = transformUserDetailData(fullPayload(), "alice");
+    const spec = buildUserDetailSpec({ status: "success", data, username: "alice", error: null, isStale: false });
+    const tileGrid = findByClassName(spec, "tile-grid");
+    const labels = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    assert.equal(values[labels.indexOf("Pool User Hashrate (1m)")], "11.2T");
+    assert.equal(values[labels.indexOf("Pool User Hashrate (24h)")], "10.4T");
+  });
+
+  await t.test("Human requirement: a missing native hashrate degrades to a placeholder, never an estimate or a crash", () => {
+    const data = transformUserDetailData(fullPayload({ aliceRecord: { hashrate_1m: null, hashrate_24h: null } }), "alice");
+    const spec = buildUserDetailSpec({ status: "success", data, username: "alice", error: null, isStale: false });
+    const tileGrid = findByClassName(spec, "tile-grid");
+    const labels = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    assert.equal(values[labels.indexOf("Pool User Hashrate (1m)")], "--");
+    assert.equal(values[labels.indexOf("Pool User Hashrate (24h)")], "--");
   });
 
   await t.test("the worker table's workername cell reuses workernameCellSpec: truncated text, full value via title/aria-label, correct link", () => {

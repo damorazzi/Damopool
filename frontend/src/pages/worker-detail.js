@@ -24,7 +24,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatSdiff, formatRelativeTime, truncateWorkername } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatHashrate, formatRelativeTime, truncateWorkername } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -78,6 +78,10 @@ export function transformWorkerDetailData(payload, workername) {
     bestShareToday: record.best_share_today || null,
     bestShareEver: record.best_share_ever || null,
     rollingWindows: record.rolling_windows || {},
+    // Phase E Milestone 28: CKPool's own native per-worker hashrate,
+    // read verbatim -- never estimated/calculated by this project.
+    hashrate1m: record.hashrate_1m,
+    hashrate24h: record.hashrate_24h,
   };
 }
 
@@ -197,6 +201,8 @@ function statTilesSectionSpec(data) {
         label: "Best Share Ever",
         value: formatCompactSdiff(data.bestShareEver && data.bestShareEver.sdiff),
       }),
+      statTileSpec({ label: "Worker Hashrate (1m)", value: formatHashrate(data.hashrate1m) }),
+      statTileSpec({ label: "Worker Hashrate (24h)", value: formatHashrate(data.hashrate24h) }),
     ],
   });
 }
@@ -205,7 +211,7 @@ function loadingSectionSpec() {
   return el("div", {
     className: "worker-detail-page__loading",
     children: [
-      loadingSkeletonSpec({ shape: "tile", count: 13, className: "tile-grid" }),
+      loadingSkeletonSpec({ shape: "tile", count: 15, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "block", height: 320 }),
     ],
   });

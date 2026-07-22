@@ -22,7 +22,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatSdiff, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatHashrate, formatRelativeTime } from "../core/format.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
 import { emptyStateSpec } from "../components/empty-state.js";
@@ -64,6 +64,13 @@ export function transformOverviewData(payload) {
     bestShareToday: pool.best_share_today || null,
     bestShareEver: pool.best_share_ever || null,
     rollingWindows: pool.rolling_windows || {},
+    // Phase E Milestone 28: CKPool's own native hashrate figures --
+    // read verbatim, never estimated/calculated by this project. null
+    // (not 0) when CKPool hasn't yet written a native stats file (a
+    // fresh pool with no history) -- statTileSpec's own null handling
+    // renders that as an empty placeholder, not a misleading "0".
+    hashrate1m: pool.hashrate_1m,
+    hashrate24h: pool.hashrate_24h,
   };
 }
 
@@ -175,13 +182,14 @@ function formatCount(n) {
 }
 
 // The Dashboard Overview wireframe (docs/ARCHITECTURE.md Section 22)
-// shows a "Pool hashrate" tile, but hashrate is not part of
-// analytics.json's schema (Section 25) -- Section 3.4 names
-// pool_stats.json as its actual source, a second endpoint deliberately
-// not added to this milestone (only analytics.json is fetched here).
-// These four tiles are the wireframe's intent applied to the data this
-// page actually has: every field below is a real analytics.json
-// `pool` field.
+// shows a "Pool hashrate" tile -- until Phase E Milestone 28,
+// analytics.json had no hashrate field at all (Section 3.4 named
+// pool_stats.json as hashrate's actual source, a second endpoint
+// deliberately not added). Milestone 28 closed that gap by reading
+// CKPool's own native pool.status file directly into analytics.json's
+// own `pool` object, so the two hashrate tiles below are now real
+// analytics.json fields like everything else on this page, not a
+// second fetch.
 function statTilesSectionSpec(data) {
   return el("div", {
     className: "tile-grid",
@@ -196,6 +204,8 @@ function statTilesSectionSpec(data) {
         label: "Best Share Ever",
         value: formatCompactSdiff(data.bestShareEver && data.bestShareEver.sdiff),
       }),
+      statTileSpec({ label: "Pool Hashrate (1m)", value: formatHashrate(data.hashrate1m) }),
+      statTileSpec({ label: "Pool Hashrate (24h)", value: formatHashrate(data.hashrate24h) }),
     ],
   });
 }
@@ -204,7 +214,7 @@ function loadingSectionSpec() {
   return el("div", {
     className: "overview-page__loading",
     children: [
-      loadingSkeletonSpec({ shape: "tile", count: 4, className: "tile-grid" }),
+      loadingSkeletonSpec({ shape: "tile", count: 6, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "block", height: 320 }),
     ],
   });

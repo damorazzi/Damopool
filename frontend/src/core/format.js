@@ -38,12 +38,22 @@ const COMPACT_UNIT_FACTORS = [
 // comma-separated form (still used where a spoken/exact reading
 // matters more than compactness, e.g. a chart's accessible summary
 // text).
-export function formatCompactSdiff(sdiff) {
-  if (!Number.isFinite(sdiff)) {
+//
+// Phase E Milestone 28 (Human decision): extracted into a shared,
+// generic core so a second caller (formatHashrate, below) can reuse
+// the exact same K/M/G/T/P logic under an honestly-named function --
+// "do not call formatCompactSdiff() when formatting hashrates, that
+// naming becomes misleading." Both wrappers are one line and behave
+// identically for the same numeric input; there is exactly one
+// formatting implementation, not two. formatCompactSdiff's own
+// behavior (including the M25 rounding-boundary fix below) is
+// unchanged by this extraction.
+function formatCompactNumber(value) {
+  if (!Number.isFinite(value)) {
     return null;
   }
-  let unit = COMPACT_UNIT_FACTORS.find((u) => Math.abs(sdiff) >= u.factor) || null;
-  let scaled = unit ? sdiff / unit.factor : sdiff;
+  let unit = COMPACT_UNIT_FACTORS.find((u) => Math.abs(value) >= u.factor) || null;
+  let scaled = unit ? value / unit.factor : value;
   // The unit above is chosen from the UNROUNDED value, so a value just
   // under a threshold (e.g. 999999.9, picked as "K") can round up to
   // "1000.00" at that unit once toFixed(2) is applied -- which should
@@ -58,11 +68,24 @@ export function formatCompactSdiff(sdiff) {
     const nextUnit = COMPACT_UNIT_FACTORS[currentIndex - 1];
     if (nextUnit) {
       unit = nextUnit;
-      scaled = sdiff / unit.factor;
+      scaled = value / unit.factor;
     }
   }
   const fixed = scaled.toFixed(2).replace(/\.?0+$/, "");
   return unit ? `${fixed}${unit.suffix}` : fixed;
+}
+
+export function formatCompactSdiff(sdiff) {
+  return formatCompactNumber(sdiff);
+}
+
+// Hashrate (Phase E Milestone 28): a plain number of hashes/second,
+// read verbatim from CKPool's own native statistics (never estimated
+// or calculated by this project) -- same K/M/G/T/P compact convention
+// as every other number in this app, via the shared core above, not a
+// second formatting style.
+export function formatHashrate(hashesPerSecond) {
+  return formatCompactNumber(hashesPerSecond);
 }
 
 // docs/ARCHITECTURE.md Section 18: username/workername are untrusted

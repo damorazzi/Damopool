@@ -39,6 +39,8 @@ function fullPayload(overrides = {}) {
           "1h": { accepted: 40, rejected: 1, average_sdiff: 120, share_frequency_per_minute: 0.6 },
           "24h": { accepted: 900, rejected: 4, average_sdiff: 110, share_frequency_per_minute: 0.6 },
         },
+        hashrate_1m: 5000000000000,
+        hashrate_24h: 6000000000000,
         ...overrides.rig1Record,
       },
       ...overrides.workers,
@@ -81,6 +83,21 @@ test("transformWorkerDetailData", async (t) => {
 
   await t.test("returns null when the workername has no record at all -- the not-found signal", () => {
     assert.equal(transformWorkerDetailData(fullPayload(), "nonexistent"), null);
+  });
+
+  await t.test("Phase E Milestone 28: extracts hashrate_1m/hashrate_24h as hashrate1m/hashrate24h", () => {
+    const data = transformWorkerDetailData(fullPayload(), "rig1");
+    assert.equal(data.hashrate1m, 5000000000000);
+    assert.equal(data.hashrate24h, 6000000000000);
+  });
+
+  await t.test("missing native hashrate fields pass through as undefined, not a throw", () => {
+    const data = transformWorkerDetailData(
+      fullPayload({ rig1Record: { hashrate_1m: undefined, hashrate_24h: undefined } }),
+      "rig1",
+    );
+    assert.equal(data.hashrate1m, undefined);
+    assert.equal(data.hashrate24h, undefined);
   });
 
   await t.test("degrades gracefully when fields are missing", () => {
@@ -176,6 +193,19 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.equal(findByClassName(spec, "chart-panel"), null);
   });
 
+  await t.test("Code Review finding (Milestone 28): loading-skeleton tile count matches the real success-state tile count, so there is no layout shift when data arrives", () => {
+    const loadingTileCount = findByClassName(
+      buildWorkerDetailSpec({ status: "loading", workername: "rig1" }),
+      "tile-grid",
+    ).children.length;
+    const data = transformWorkerDetailData(fullPayload(), "rig1");
+    const successTileCount = findByClassName(
+      buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false }),
+      "tile-grid",
+    ).children.length;
+    assert.equal(loadingTileCount, successTileCount);
+  });
+
   await t.test("error state (no data) renders the header and only the error banner", () => {
     const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" });
     const spec = buildWorkerDetailSpec({ status: "error", data: null, workername: "rig1", error, isStale: false });
@@ -196,7 +226,7 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.ok(message.text.includes(truncateWorkername("nonexistent")));
   });
 
-  await t.test("success renders the back-link, all 13 stat tiles, and the chart -- no DataTable/split-layout", () => {
+  await t.test("success renders the back-link, all 15 stat tiles, and the chart -- no DataTable/split-layout", () => {
     const data = transformWorkerDetailData(fullPayload(), "rig1");
     const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
 
@@ -204,12 +234,32 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.equal(backLink.attrs.href, "#/workers");
 
     const tileGrid = findByClassName(spec, "tile-grid");
-    assert.equal(tileGrid.children.length, 13);
+    assert.equal(tileGrid.children.length, 15);
 
     assert.ok(findByClassName(spec, "chart-panel"));
     assert.equal(findByClassName(spec, "data-table"), null, "worker-detail.js has no DataTable per Section 5");
     assert.equal(findByClassName(spec, "split-layout"), null, "worker-detail.js has no split-layout per Section 5");
     assert.equal(findByClassName(spec, "error-banner"), null);
+  });
+
+  await t.test("Phase E Milestone 28: Worker Hashrate (1m)/(24h) tiles render with compact-formatted values", () => {
+    const data = transformWorkerDetailData(fullPayload(), "rig1");
+    const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
+    const tileGrid = findByClassName(spec, "tile-grid");
+    const labels = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    assert.equal(values[labels.indexOf("Worker Hashrate (1m)")], "5T");
+    assert.equal(values[labels.indexOf("Worker Hashrate (24h)")], "6T");
+  });
+
+  await t.test("Human requirement: a missing native hashrate degrades to a placeholder, never an estimate or a crash", () => {
+    const data = transformWorkerDetailData(fullPayload({ rig1Record: { hashrate_1m: null, hashrate_24h: null } }), "rig1");
+    const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
+    const tileGrid = findByClassName(spec, "tile-grid");
+    const labels = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    assert.equal(values[labels.indexOf("Worker Hashrate (1m)")], "--");
+    assert.equal(values[labels.indexOf("Worker Hashrate (24h)")], "--");
   });
 
   await t.test("the Status tile reflects is_active correctly in both directions", () => {

@@ -71,6 +71,19 @@ class TempLogDirMixin:
         lines = [json.dumps(s) for s in shares]
         return self.write_sharelog(name, lines)
 
+    def write_pool_status(self, hashrate1m="1T", hashrate1d="1T"):
+        pool_dir = os.path.join(self.tmpdir, "pool")
+        os.makedirs(pool_dir, exist_ok=True)
+        with open(os.path.join(pool_dir, "pool.status"), "w") as f:
+            f.write(json.dumps({"runtime": 60}) + "\n")
+            f.write(json.dumps({"hashrate1m": hashrate1m, "hashrate1d": hashrate1d}) + "\n")
+
+    def write_native_user_file(self, username, hashrate1m="1T", hashrate1d="1T", workers=None):
+        users_dir = os.path.join(self.tmpdir, "users")
+        os.makedirs(users_dir, exist_ok=True)
+        with open(os.path.join(users_dir, username), "w") as f:
+            json.dump({"hashrate1m": hashrate1m, "hashrate1d": hashrate1d, "worker": workers or []}, f)
+
 
 # ---------------------------------------------------------------------------
 # 0. Dependency files must remain byte-for-byte unmodified.
@@ -99,6 +112,40 @@ class TestDependenciesUnmodified(unittest.TestCase):
 
     def test_worker_statistics_unmodified(self):
         self._assert_unmodified("worker_statistics.py")
+
+
+# ---------------------------------------------------------------------------
+# 0b. The actual CLAUDE.md-protected production parser (Code Review
+# finding, Phase E Milestone 28): TestDependenciesUnmodified above only
+# guards this repo's own analytics-engine helper modules via `git diff`.
+# The real, hard-off-limits file CLAUDE.md names --
+# /home/damopool/ckpool-solo/logs/parse_pool_stats.py -- lives OUTSIDE
+# this git repository entirely (a sibling directory to ckpool/, not
+# tracked by its history at all), so `git diff --quiet HEAD` can't
+# check it: there was no automated guard for this specific rule until
+# now. A checksum is the only mechanism available for a file this repo
+# doesn't track -- if this ever fails, it means the file changed, which
+# this milestone (and generally, per CLAUDE.md) must never do.
+# ---------------------------------------------------------------------------
+class TestProtectedProductionParserUnmodified(unittest.TestCase):
+    PROTECTED_PATH = "/home/damopool/ckpool-solo/logs/parse_pool_stats.py"
+    # Computed via `sha256sum` against the real file at review time
+    # (2026-07-22). Update only if a Human explicitly authorizes a
+    # change to this file -- CLAUDE.md: "modify parse_pool_stats.py" is
+    # on the "Never" list.
+    EXPECTED_SHA256 = "1a10b1b4b4cdc19d059e3dc266b5467b59b02f0739f9fb9b1d2838bca76640a8"
+
+    def test_checksum_unchanged(self):
+        import hashlib
+        try:
+            with open(self.PROTECTED_PATH, "rb") as f:
+                digest = hashlib.sha256(f.read()).hexdigest()
+        except OSError as exc:
+            self.fail(f"could not read protected file {self.PROTECTED_PATH} to verify it: {exc}")
+        self.assertEqual(
+            digest, self.EXPECTED_SHA256,
+            f"{self.PROTECTED_PATH} has changed (CLAUDE.md: this file must never be modified)",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -521,6 +568,85 @@ class TestLiveTicker(TempLogDirMixin, unittest.TestCase):
         self.assertEqual(entry["workername"], "w2")
         self.assertEqual(entry["current_daily_best"]["sdiff"], 9.0)
         self.assertEqual(entry["previous_daily_best"]["sdiff"], 2.0)
+
+
+# ---------------------------------------------------------------------------
+# 7b. Phase E Milestone 28: native CKPool hashrate merge
+# ---------------------------------------------------------------------------
+class TestNativeHashrateMerge(TempLogDirMixin, unittest.TestCase):
+    def test_schema_version_bumped_to_1_2(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertEqual(data["metadata"]["schema_version"], "1.2")
+
+    def test_pool_hashrate_merged_from_pool_status(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_pool_status(hashrate1m="22.8T", hashrate1d="32.8T")
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertAlmostEqual(data["pool"]["hashrate_1m"], 22.8e12, delta=1)
+        self.assertAlmostEqual(data["pool"]["hashrate_24h"], 32.8e12, delta=1)
+
+    def test_pool_hashrate_none_when_pool_status_missing_no_crash(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertIsNone(data["pool"]["hashrate_1m"])
+        self.assertIsNone(data["pool"]["hashrate_24h"])
+
+    def test_existing_pool_fields_preserved_alongside_new_hashrate_fields(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(createdate=cd(int(now.timestamp())), result=True, sdiff=2.0)])
+        self.write_pool_status(hashrate1m="1T", hashrate1d="1T")
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertEqual(data["pool"]["accepted_count"], 1)
+        self.assertIn("hashrate_1m", data["pool"])
+
+    def test_user_hashrate_merged_only_for_a_user_analytics_state_already_produced(self):
+        """A native file for a user with zero sharelog-derived records must
+        not create a phantom users[] entry -- native data only augments an
+        already-existing user, it never creates one on its own."""
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(username="alice", createdate=cd(int(now.timestamp())))])
+        self.write_native_user_file("alice", hashrate1m="9.84T", hashrate1d="10.4T")
+        self.write_native_user_file("bob_has_no_shares", hashrate1m="5T", hashrate1d="5T")
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertAlmostEqual(data["users"]["alice"]["hashrate_1m"], 9.84e12, delta=1)
+        self.assertNotIn("bob_has_no_shares", data["users"])
+
+    def test_user_hashrate_none_when_native_file_missing_for_a_real_user(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(username="alice", createdate=cd(int(now.timestamp())))])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertIn("alice", data["users"])
+        self.assertIsNone(data["users"]["alice"]["hashrate_1m"])
+        self.assertIsNone(data["users"]["alice"]["hashrate_24h"])
+
+    def test_worker_hashrate_merged_from_nested_worker_array(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp())))])
+        self.write_native_user_file(
+            "alice", hashrate1m="9.84T", hashrate1d="10.4T",
+            workers=[{"workername": "alice.rig1", "hashrate1m": "9.84T", "hashrate1d": "10.4T"}],
+        )
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertAlmostEqual(data["workers"]["alice.rig1"]["hashrate_1m"], 9.84e12, delta=1)
+
+    def test_worker_hashrate_none_when_native_data_missing_for_a_real_worker(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp())))])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertIn("alice.rig1", data["workers"])
+        self.assertIsNone(data["workers"]["alice.rig1"]["hashrate_1m"])
+
+    def test_full_output_still_json_serializable_with_native_hashrates_present(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp())))])
+        self.write_pool_status(hashrate1m="22.8T", hashrate1d="32.8T")
+        self.write_native_user_file(
+            "alice", hashrate1m="9.84T", hashrate1d="10.4T",
+            workers=[{"workername": "alice.rig1", "hashrate1m": "9.84T", "hashrate1d": "10.4T"}],
+        )
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        json.dumps(data)  # must serialize cleanly
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   formatSdiff,
   formatCompactSdiff,
+  formatHashrate,
   formatPercentage,
   formatTimestamp,
   formatRelativeTime,
@@ -92,6 +93,30 @@ test("formatCompactSdiff (Phase E Milestone 25)", async (t) => {
     assert.equal(formatCompactSdiff(NaN), null);
     assert.equal(formatCompactSdiff(Infinity), null);
     assert.equal(formatCompactSdiff("12345"), null);
+  });
+});
+
+test("formatHashrate (Phase E Milestone 28)", async (t) => {
+  await t.test("matches the exact examples this was specified against, same K/M/G/T convention as sdiff formatting", () => {
+    assert.equal(formatHashrate(1000), "1K");
+    assert.equal(formatHashrate(1500000), "1.5M");
+    assert.equal(formatHashrate(2500000000), "2.5G");
+    assert.equal(formatHashrate(6800000000000), "6.8T");
+  });
+
+  await t.test("Human decision: shares one implementation with formatCompactSdiff, not a second formatting style -- identical output for the same input, across every unit and edge case", () => {
+    const values = [0, 500, 999.999, 999999.9, 1e3, 1e6, 1e9, 1e12, 1e15, -2500000000, 82493037.86];
+    for (const value of values) {
+      assert.equal(formatHashrate(value), formatCompactSdiff(value), `mismatch for ${value}`);
+    }
+  });
+
+  await t.test("returns null for null/undefined/NaN/Infinity/wrong-type, matching every other formatter's contract", () => {
+    assert.equal(formatHashrate(null), null);
+    assert.equal(formatHashrate(undefined), null);
+    assert.equal(formatHashrate(NaN), null);
+    assert.equal(formatHashrate(Infinity), null);
+    assert.equal(formatHashrate("13.4T"), null);
   });
 });
 

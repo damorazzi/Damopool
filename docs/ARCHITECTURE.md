@@ -129,11 +129,17 @@ those figures — is what loads and is indexed immediately, which is what
 "fast first paint" and "crawlable" mean here. The live figures themselves
 are a progressive enhancement, fetched by `core/api.js` after first paint
 and filled into those placeholders, the same loading-state pattern used
-throughout the dashboard (Section 16). Of those three figures, only
-`best_share_ever` (`pool.best_share_ever`) is present in `analytics.json`
-(Section 25) — hashrate and blocks-found are not part of that contract
-and would be fetched from `pool_stats.json` / `historical_data.json`
-instead, which `core/api.js` is already permitted to fetch (Section 15).
+throughout the dashboard (Section 16). Of those three figures,
+`best_share_ever` (`pool.best_share_ever`) and, as of Phase E Milestone
+28, hashrate (`pool.hashrate_1m`/`hashrate_24h` — CKPool's own native
+values, see Section 25) are both present in `analytics.json` directly;
+only blocks-found remains outside that contract and would need its own
+future data source (Section 24's "Explicitly Out of Scope" list names
+this and related figures — pool luck, estimated block probability — as
+separate future milestones, not part of this one). Code Review (Milestone
+28) flagged this section as having gone stale relative to Section 25's
+own updated schema reference — reconciled here rather than left
+contradictory.
 A crawler indexes the page correctly without ever running any of these
 fetches; a human visitor sees the static page immediately and the live
 numbers fill in a moment later. This is a stated, deliberate compromise,
@@ -774,12 +780,15 @@ Not a redefinition of the contract — `analytics_builder.py` /
 `analytics_state.py` remain the source of truth (Section 1). Recorded
 here so a Phase C/D implementer does not have to read Python source to
 know the shape this architecture is built around, current as of
-`schema_version` `"1.1"`:
+`schema_version` `"1.2"` (Phase E Milestone 28 bumped this from `"1.1"`
+— additive, backward-compatible: two new `hashrate_1m`/`hashrate_24h`
+fields on `pool`/`users[...]`/`workers[...]`, nothing removed or
+reshaped):
 
 ```
 {
   "metadata": {
-    "schema_version": "1.1", "generated_at": <ISO8601>, "generator": <str>,
+    "schema_version": "1.2", "generated_at": <ISO8601>, "generator": <str>,
     "source_files_scanned": <int>, "pool_start_date": <date|null>,
     "share_records_processed": <int>
   },
@@ -795,11 +804,12 @@ know the shape this architecture is built around, current as of
         "average_sdiff": <float|null>,
         "share_frequency_per_minute": <float>
       }
-    }
+    },
+    "hashrate_1m", "hashrate_24h": <float|null>
   },
   "users": {
     "<username>": {
-      ...same scope fields as pool...,
+      ...same scope fields as pool (including hashrate_1m/hashrate_24h)...,
       "workers": [<workername>, ...],
       "rolling_windows": {...}
     }
@@ -808,7 +818,7 @@ know the shape this architecture is built around, current as of
     "<workername>": {
       "agent": <str|null>, "first_share_at", "last_share_at": <ISO8601|null>,
       "is_active": <bool>,
-      ...same scope fields as pool...,
+      ...same scope fields as pool (including hashrate_1m/hashrate_24h)...,
       "rolling_windows": {...}
     }
   },
@@ -846,3 +856,22 @@ and `best_share_ever`'s `timestamp` field is normally an ISO8601 string,
 but is the literal string `"unknown"` instead if the underlying share had
 no valid `createdate` (`pool_statistics.py`'s `_BestTracker.to_dict`) —
 UI code reading this field should not assume it always parses as a date.
+
+`hashrate_1m`/`hashrate_24h` (Phase E Milestone 28) are the one part of
+this schema **not** derived from `.sharelog` data at all — every other
+field above comes from `analytics_state.py`'s incremental sharelog
+processing (Section 1's source of truth). These two are read directly
+from CKPool's own native, live-updated statistics files (`logs/pool/
+pool.status` for `pool`, `logs/users/<address>` — including its nested
+`worker` array — for `users`/`workers`) by a separate, standalone module,
+`ckpool_native_stats.py`, and merged in by `analytics_builder.py` after
+`analytics_state.py` has already produced everything else. Values are
+plain numbers (hashes/second), never CKPool's own formatted strings (e.g.
+`"9.84T"`) and never estimated or aggregated by this project's own code —
+`null` means CKPool has not yet written a native file for that
+user/worker (a brand-new connection, or a transient read timing gap),
+not a zero hashrate. Deliberately independent of `analytics_state.py`'s
+incremental byte-offset engine: these are small, fully-overwritten
+snapshots CKPool keeps current on its own, not append-only logs, so a
+full fresh read every `analytics_builder.py` run needs none of that
+machinery.

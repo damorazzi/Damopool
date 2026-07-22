@@ -27,6 +27,8 @@ function fullPayload(overrides = {}) {
         "1h": { accepted: 40, rejected: 1, average_sdiff: 120, share_frequency_per_minute: 0.6 },
         "24h": { accepted: 900, rejected: 4, average_sdiff: 110, share_frequency_per_minute: 0.6 },
       },
+      hashrate_1m: 13400000000000,
+      hashrate_24h: 12500000000000,
       ...overrides.pool,
     },
     users: {},
@@ -72,12 +74,21 @@ test("transformOverviewData", async (t) => {
     assert.deepEqual(data.rollingWindows, payload.pool.rolling_windows);
   });
 
+  await t.test("Phase E Milestone 28: extracts hashrate_1m/hashrate_24h as hashrate1m/hashrate24h", () => {
+    const payload = fullPayload();
+    const data = transformOverviewData(payload);
+    assert.equal(data.hashrate1m, 13400000000000);
+    assert.equal(data.hashrate24h, 12500000000000);
+  });
+
   await t.test("degrades gracefully when pool/metadata fields are missing", () => {
     const data = transformOverviewData({ metadata: {}, pool: {} });
     assert.equal(data.generatedAt, null);
     assert.equal(data.acceptedCount, undefined);
     assert.equal(data.bestShareToday, null);
     assert.deepEqual(data.rollingWindows, {});
+    assert.equal(data.hashrate1m, undefined);
+    assert.equal(data.hashrate24h, undefined);
   });
 });
 
@@ -201,6 +212,16 @@ test("buildOverviewSpec", async (t) => {
     assert.equal(findByClassName(spec, "chart-panel"), null);
   });
 
+  await t.test("Code Review finding (Milestone 28): loading-skeleton tile count matches the real success-state tile count, so there is no layout shift when data arrives", () => {
+    const loadingTileCount = findByClassName(buildOverviewSpec({ status: "loading" }), "tile-grid").children.length;
+    const data = transformOverviewData(fullPayload());
+    const successTileCount = findByClassName(
+      buildOverviewSpec({ status: "success", data, error: null, isStale: false }),
+      "tile-grid",
+    ).children.length;
+    assert.equal(loadingTileCount, successTileCount);
+  });
+
   await t.test("error state (no data) renders only the error banner", () => {
     const error = new FetchApiError("x", { endpoint: "/analytics.json", kind: "network" });
     const spec = buildOverviewSpec({ status: "error", data: null, error, isStale: false });
@@ -269,6 +290,30 @@ test("buildOverviewSpec", async (t) => {
     const tileGrid = findByClassName(spec, "tile-grid");
     const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
     assert.equal(values[0], "42");
+  });
+
+  await t.test("Phase E Milestone 28: Pool Hashrate (1m)/(24h) tiles render with compact-formatted values", () => {
+    const data = transformOverviewData(fullPayload());
+    const spec = buildOverviewSpec({ status: "success", data, error: null, isStale: false });
+    const tileGrid = findByClassName(spec, "tile-grid");
+    const labels = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    const oneMinIndex = labels.indexOf("Pool Hashrate (1m)");
+    const oneDayIndex = labels.indexOf("Pool Hashrate (24h)");
+    assert.ok(oneMinIndex !== -1, "expected a Pool Hashrate (1m) tile");
+    assert.ok(oneDayIndex !== -1, "expected a Pool Hashrate (24h) tile");
+    assert.equal(values[oneMinIndex], "13.4T");
+    assert.equal(values[oneDayIndex], "12.5T");
+  });
+
+  await t.test("Human requirement: a missing native hashrate degrades to a placeholder, never an estimate or a crash", () => {
+    const data = transformOverviewData(fullPayload({ pool: { hashrate_1m: null, hashrate_24h: null } }));
+    const spec = buildOverviewSpec({ status: "success", data, error: null, isStale: false });
+    const tileGrid = findByClassName(spec, "tile-grid");
+    const labels = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    assert.equal(values[labels.indexOf("Pool Hashrate (1m)")], "--");
+    assert.equal(values[labels.indexOf("Pool Hashrate (24h)")], "--");
   });
 
   await t.test("an unrecognized status throws rather than silently rendering the success branch", () => {

@@ -27,7 +27,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatSdiff, formatPercentage, formatRelativeTime, truncateAddress } from "../core/format.js";
+import { formatCompactSdiff, formatSdiff, formatHashrate, formatPercentage, formatRelativeTime, truncateAddress } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -130,6 +130,11 @@ export function transformUserDetailData(payload, username) {
     previousDailyBest: (dailyBest && dailyBest.previous_daily_best) || null,
     improvementAmount: dailyBest ? dailyBest.improvement_amount : null,
     improvementPercentage: dailyBest ? dailyBest.improvement_percentage : null,
+    // Phase E Milestone 28 (Human's own clarification: the individual
+    // User Detail page, not the Users list table): CKPool's own native
+    // per-user hashrate, read verbatim -- never estimated/calculated.
+    hashrate1m: record.hashrate_1m,
+    hashrate24h: record.hashrate_24h,
   };
 }
 
@@ -279,6 +284,8 @@ function statTilesSectionSpec(data) {
         label: "Best Share Ever",
         value: formatCompactSdiff(data.bestShareEver && data.bestShareEver.sdiff),
       }),
+      statTileSpec({ label: "Pool User Hashrate (1m)", value: formatHashrate(data.hashrate1m) }),
+      statTileSpec({ label: "Pool User Hashrate (24h)", value: formatHashrate(data.hashrate24h) }),
     ],
   });
 }
@@ -306,7 +313,7 @@ function loadingSectionSpec() {
   return el("div", {
     className: "user-detail-page__loading",
     children: [
-      loadingSkeletonSpec({ shape: "tile", count: 7, className: "tile-grid" }),
+      loadingSkeletonSpec({ shape: "tile", count: 9, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "row", count: 3 }),
       loadingSkeletonSpec({ shape: "block", height: 320 }),
     ],
