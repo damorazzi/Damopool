@@ -27,6 +27,18 @@
   gap: var(--space-5);
 }
 
+/* Phase E Milestone 27, Code Review finding: a vertical stack of two
+   full Cards with no gap between them (users.js's combined Users
+   table + Workers-matches panel, shown together when a search query
+   matches both) -- without this, base.css's universal margin reset
+   left them touching, borders flush against each other as if they
+   were one box. */
+.users-page__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 /* Phase E Milestone 19: without this, a grid item's default
    min-width:auto means it won't shrink below its content's
    min-content size -- a DataTable's own overflow-x:auto (data-

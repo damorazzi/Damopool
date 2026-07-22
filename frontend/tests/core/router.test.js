@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseHash, matchRoute, buildHash } from "../../src/core/router.js";
+import { parseHash, matchRoute, buildHash, normalizePath } from "../../src/core/router.js";
 
 test("parseHash", async (t) => {
   await t.test("empty/absent hash is the root path", () => {
@@ -133,6 +133,24 @@ test("matchRoute", async (t) => {
     const result = matchRoute(`/users/${encodeURIComponent(raw)}`, ROUTES);
     assert.equal(result.route.name, "user-detail");
     assert.deepEqual(result.params, { username: raw });
+  });
+});
+
+test("normalizePath", async (t) => {
+  await t.test("a plain path passes through unchanged", () => {
+    assert.equal(normalizePath("/ticker"), "/ticker");
+  });
+
+  await t.test("a trailing slash is removed, matching matchRoute's own tolerance for one (Code Review, Milestone 27)", () => {
+    assert.equal(normalizePath("/ticker/"), "/ticker");
+  });
+
+  await t.test("repeated slashes collapse the same way matchRoute's own segment-splitting already does", () => {
+    assert.equal(normalizePath("//ticker//"), "/ticker");
+  });
+
+  await t.test("the root path normalizes to itself", () => {
+    assert.equal(normalizePath("/"), "/");
   });
 });
 

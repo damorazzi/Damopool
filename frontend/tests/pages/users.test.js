@@ -96,6 +96,12 @@ test("transformUsersData", async (t) => {
     assert.deepEqual(transformUsersData({ metadata: {}, users: {} }).rows, []);
     assert.deepEqual(transformUsersData({ metadata: {} }).rows, []);
   });
+
+  await t.test("Milestone 27: also returns workerRows, reusing workers.js's own transform over the same payload", () => {
+    const data = transformUsersData(fullPayload({ workers: { rig1: { is_active: true, accepted_count: 1, last_share_at: null } } }));
+    assert.equal(data.workerRows.length, 1);
+    assert.equal(data.workerRows[0].workername, "rig1");
+  });
 });
 
 test("isUsersEmpty", async (t) => {
@@ -302,8 +308,54 @@ test("buildUsersSpec", async (t) => {
     const data = transformUsersData(fullPayload());
     const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: raw });
     const message = findByClassName(spec, "empty-state__message");
-    assert.equal(message.text, `No users match "${raw}".`);
+    assert.equal(message.text, `No matches found for "${raw}".`);
     assert.equal(message.tag, "p");
+  });
+
+  await t.test("Milestone 27: a query matching only a worker (no user) shows the Workers panel, no Users panel, no empty-state", () => {
+    const data = transformUsersData(fullPayload({ workers: { superminer: { is_active: true, accepted_count: 1, last_share_at: null } } }));
+    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "superminer" });
+    assert.equal(findByClassName(spec, "empty-state"), null);
+    const workersCard = findByClassName(spec, "data-table");
+    assert.ok(workersCard);
+    const caption = findByClassName(spec, "data-table__caption") || findByClassName(spec, "data-table__caption--visually-hidden");
+    // The single visible table present must be the workers-results one,
+    // not a coincidentally-empty Users table -- assert via the card
+    // title text rather than assuming table identity from position.
+    const cardTitles = (function collect(node, out = []) {
+      if (!node || typeof node !== "object") return out;
+      if ((node.className || "").includes("card__header")) out.push(node.text ?? (node.children && node.children[0] && node.children[0].text));
+      for (const child of node.children || []) collect(child, out);
+      return out;
+    })(spec);
+    assert.deepEqual(cardTitles, ["Workers"]);
+  });
+
+  await t.test("Milestone 27: a query matching both a user and a worker shows both panels wrapped together", () => {
+    // "alice" (from the base fixture) matches a user; give a worker a
+    // name that also contains "alice" so the same query matches both.
+    const both = transformUsersData(
+      fullPayload({ workers: { "alice-rig9": { is_active: true, accepted_count: 1, last_share_at: null } } }),
+    );
+    const spec = buildUsersSpec({ status: "success", data: both, error: null, isStale: false, searchQuery: "alice" });
+    const results = findByClassName(spec, "users-page__results");
+    assert.ok(results, "expected the two-panel results wrapper when both a user and a worker match");
+    assert.equal(results.children.length, 2);
+  });
+
+  await t.test("Milestone 27: an empty query never shows a Workers panel, even if a worker exists", () => {
+    const data = transformUsersData(fullPayload({ workers: { rig1: { is_active: true, accepted_count: 1, last_share_at: null } } }));
+    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    assert.equal(findByClassName(spec, "users-page__results"), null);
+    assert.equal(findByClassName(spec, "empty-state"), null);
+  });
+
+  await t.test("the search box placeholder/label now mention both usernames and workers", () => {
+    const data = transformUsersData(fullPayload());
+    const spec = buildUsersSpec({ status: "success", data, error: null, isStale: false, searchQuery: "" });
+    const input = findByClassName(spec, "search-box__input");
+    assert.equal(input.attrs.placeholder, "Search users or workers");
+    assert.equal(input.attrs["aria-label"], "Search users or workers");
   });
 });
 

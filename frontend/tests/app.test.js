@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   ROUTES,
+  REDIRECTS,
+  resolveRedirect,
   notFoundSpec,
   decideNavigation,
   ANALYTICS_POLL_INTERVAL_MS,
@@ -14,24 +16,20 @@ import { route as usersRoute } from "../src/pages/users.js";
 import { route as workersRoute } from "../src/pages/workers.js";
 import { route as userDetailRoute } from "../src/pages/user-detail.js";
 import { route as workerDetailRoute } from "../src/pages/worker-detail.js";
-import { route as searchRoute } from "../src/pages/search.js";
-import { route as tickerRoute } from "../src/pages/ticker.js";
 import { route as historyRoute } from "../src/pages/history.js";
 import { matchRoute } from "../src/core/router.js";
 import { THEME_STORAGE_KEY } from "../src/shell/shell.js";
 
 test("ROUTES", async (t) => {
   await t.test("includes every page's route, unmodified", () => {
-    assert.equal(ROUTES.length, 9);
+    assert.equal(ROUTES.length, 7);
     assert.equal(ROUTES[0], overviewRoute);
     assert.equal(ROUTES[1], poolRoute);
     assert.equal(ROUTES[2], usersRoute);
     assert.equal(ROUTES[3], userDetailRoute);
     assert.equal(ROUTES[4], workersRoute);
     assert.equal(ROUTES[5], workerDetailRoute);
-    assert.equal(ROUTES[6], searchRoute);
-    assert.equal(ROUTES[7], tickerRoute);
-    assert.equal(ROUTES[8], historyRoute);
+    assert.equal(ROUTES[6], historyRoute);
   });
 
   await t.test("the root path matches the Overview route, matching router.js's own matching logic", () => {
@@ -82,26 +80,45 @@ test("ROUTES", async (t) => {
     assert.equal(match.route.name, "workers");
   });
 
-  await t.test("/search matches the Search route", () => {
-    const match = matchRoute("/search", ROUTES);
-    assert.ok(match);
-    assert.equal(match.route.name, "search");
-  });
-
-  await t.test("/ticker matches the Ticker route", () => {
-    const match = matchRoute("/ticker", ROUTES);
-    assert.ok(match);
-    assert.equal(match.route.name, "ticker");
-  });
-
   await t.test("/history matches the History route", () => {
     const match = matchRoute("/history", ROUTES);
     assert.ok(match);
     assert.equal(match.route.name, "history");
   });
 
+  await t.test("/ticker and /search (both retired pages' former routes) no longer match -- both are handled as redirects instead", () => {
+    assert.equal(matchRoute("/ticker", ROUTES), null);
+    assert.equal(matchRoute("/search", ROUTES), null);
+  });
+
   await t.test("an unknown path does not match", () => {
     assert.equal(matchRoute("/does-not-exist", ROUTES), null);
+  });
+});
+
+test("REDIRECTS / resolveRedirect", async (t) => {
+  await t.test("/ticker redirects to Overview (Phase E Milestone 27: the Ticker page was retired, superseded by the Global Live Feed)", () => {
+    assert.equal(resolveRedirect("/ticker"), "/");
+  });
+
+  await t.test("/search redirects to Users (Phase E Milestone 27: the Search page was retired, its functionality embedded into Users)", () => {
+    assert.equal(resolveRedirect("/search"), "/users");
+  });
+
+  await t.test("a path with no registered redirect returns null, not undefined or an empty string", () => {
+    assert.equal(resolveRedirect("/does-not-exist"), null);
+    assert.equal(resolveRedirect("/pool"), null);
+  });
+
+  await t.test("REDIRECTS never targets a path that isn't itself a real, currently-matchable route", () => {
+    for (const target of Object.values(REDIRECTS)) {
+      assert.ok(matchRoute(target, ROUTES), `redirect target "${target}" must itself resolve to a real route`);
+    }
+  });
+
+  await t.test("Code Review fix: a trailing slash still resolves the redirect (normalized the same way matchRoute normalizes a real route)", () => {
+    assert.equal(resolveRedirect("/ticker/"), "/");
+    assert.equal(resolveRedirect("/search/"), "/users");
   });
 });
 

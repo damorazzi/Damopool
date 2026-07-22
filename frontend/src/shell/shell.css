@@ -1,9 +1,19 @@
 /* Shared application shell -- docs/DESIGN_SYSTEM.md Section 10.7
    (Navigation) and 10.11 (Footer). Depends on tokens.css, a theme
    file, base.css, and layout.css (.page-container) already being
-   loaded. Mobile-first, matching layout.css's own convention: base
-   rules are the <768px case, the single @media rule below is the
-   Tablet-and-up override (docs/ARCHITECTURE.md Section 12).
+   loaded.
+
+   Phase E Milestone 27: the nav dropdown is no longer a <768px-only
+   pattern -- the hamburger toggle and collapsed dropdown panel are now
+   the nav presentation at every breakpoint (Human decision: reduce
+   navigation surface area everywhere, not just on narrow viewports).
+   The previous `@media (min-width: 768px)` override that restored a
+   horizontal, always-visible list above that width has been removed
+   entirely, not just disabled -- the base (mobile) rules below are now
+   the only rules. wireNavToggle's JS (shell.js) is unchanged: the
+   dropdown mechanism (aria-expanded, Escape/outside-click dismiss) was
+   already fully built and tested for the <768px case and needed no
+   changes to serve every viewport width.
 
    Icon glyphs (icon-hamburger, icon-theme, icon-external-link) render
    as empty aria-hidden placeholders -- the same known, tracked gap as
@@ -41,10 +51,11 @@
 }
 
 /* Groups the hamburger and theme toggle so a single auto margin keeps
-   them pinned to the header's trailing edge -- the nav toggle is only
-   in-flow below 768px and the nav list only at/above it, so two
-   separate auto margins on siblings would split the free space between
-   them instead of grouping the two buttons together. */
+   them pinned to the header's trailing edge. Both buttons are always
+   in-flow now (Milestone 27 made the nav toggle permanent at every
+   breakpoint, not just below 768px), but the grouping wrapper is kept
+   regardless -- a single auto margin on this wrapper is simpler than
+   putting one on each button individually. */
 .shell-header__controls {
   display: flex;
   align-items: center;
@@ -73,8 +84,49 @@
   background: var(--color-surface-raised);
 }
 
-/* Below 768px, the nav list collapses behind the hamburger toggle into
-   a full-width dropdown panel (docs/DESIGN_SYSTEM.md Section 10.7). */
+/* Human-reported bug, real-browser use: base.css's shared `.icon:empty
+   { display: none }` rule (Milestone 20) collapses every icon span
+   that has no actual DOM children -- which was every icon in this
+   project, including this one, since no icon glyph had ever actually
+   been implemented (a known, disclosed gap this file's own module
+   comment already named). Below <768px that only ever hid a secondary,
+   less-visited affordance; once Milestone 27 made the hamburger the
+   *only* nav at every width, an invisible toggle meant the entire nav
+   appeared to not exist at all on desktop. Fixed, narrowly scoped to
+   just this one icon (not a general icon-system build-out, which
+   remains its own separate, larger, not-yet-scheduled piece of work):
+   a hand-drawn three-bar glyph via a single ::before plus a box-shadow
+   pair (one <span>, no image/font/SVG dependency, matching this
+   project's "hand-written CSS, no framework" convention), using
+   currentColor so it re-themes automatically exactly like the button's
+   own text colour already does. The :empty override below is required
+   -- pseudo-element content does not count as a "child" for the
+   :empty selector, so without it the general collapse rule would still
+   hide this span even after giving it real drawn content. */
+.icon-hamburger {
+  position: relative;
+}
+
+.icon-hamburger:empty {
+  display: inline-flex;
+}
+
+.icon-hamburger::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 2px;
+  background: currentColor;
+  box-shadow:
+    0 -5px currentColor,
+    0 5px currentColor;
+}
+
+/* The nav list is always collapsed behind the hamburger toggle into a
+   full-width dropdown panel (docs/DESIGN_SYSTEM.md Section 10.7,
+   updated Milestone 27 -- previously a <768px-only pattern). */
 .shell-header__nav {
   display: none;
   position: absolute;
@@ -114,26 +166,6 @@
 .shell-header__nav-link--active {
   color: var(--color-accent-text);
   border-bottom-color: var(--color-accent);
-}
-
-@media (min-width: 768px) {
-  .shell-header__nav-toggle {
-    display: none;
-  }
-
-  .shell-header__nav {
-    display: block;
-    position: static;
-    background: transparent;
-    border: none;
-    padding: 0;
-  }
-
-  .shell-header__nav-list {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-5);
-  }
 }
 
 .shell-footer {

@@ -166,8 +166,11 @@ frontend/
 
   src/                         # source JS/CSS (bundler-ready, unbundled in v1)
     shell/
-      shell.js                  # renders shared header/nav/footer/theme toggle
+      shell.js                  # renders shared header/nav/Global Live Feed/
+                                 # footer/theme toggle
       shell.css
+      live-feed-events.js        # Milestone 27: pure event-synthesis/diffing
+                                  # for the Global Live Feed
 
     core/
       router.js                 # hash router for the dashboard app
@@ -175,6 +178,9 @@ frontend/
       api.js                    # data layer: fetch, cache, polling, retry
       format.js                 # shared formatting (sdiff, %, dates, durations)
       errors.js                 # centralized error/staleness classification
+      live-ticker.js            # pure live_ticker helpers (Milestone 27:
+                                 # relocated from the retired pages/ticker.js,
+                                 # now shared by shell/live-feed-events.js)
 
     charts/
       chart.js                  # ECharts init/resize/teardown wrapper
@@ -183,13 +189,15 @@ frontend/
     pages/                     # one module per dashboard route
       overview.js
       pool.js
-      users.js
+      users.js                  # Milestone 27: search now cross-entity
+                                 # (users + workers), absorbing the retired
+                                 # search.js's own worker-results panel
       user-detail.js
       workers.js
       worker-detail.js
-      ticker.js
-      search.js
       history.js
+      # Milestone 27 retired ticker.js and search.js (see Section 5/9) --
+      # not listed here any more.
       # future, additive only: admin.js, notifications.js,
       # achievements.js, miners.js
 
@@ -202,7 +210,8 @@ frontend/
       loading-skeleton.js
       error-banner.js
       search-box.js
-      ticker-feed.js
+      live-feed.js               # Milestone 27: superseded ticker-feed.js
+                                  # (deleted along with pages/ticker.js)
 
     styles/
       tokens.css                 # design tokens: colour, spacing, type scale
@@ -227,22 +236,20 @@ Analytics, which are already part of this architecture.
 ## 5. Component Hierarchy
 
 ```
-shell.js (header, nav, theme toggle, footer)
+shell.js (header, nav, theme toggle, Global Live Feed, footer)
   |
   +-- [MPA pages]            static HTML, shell injected at runtime
   |     landing / status / docs / api-docs
   |
   +-- app/index.html -> router.js
         |
-        +-- overview.js        (Card, StatTile x N, ChartPanel, TickerFeed)
+        +-- overview.js        (Card, StatTile x N, ChartPanel)
         +-- pool.js             (StatTile x N, ChartPanel, DataTable)
-        +-- users.js              (DataTable, SearchBox)
+        +-- users.js              (DataTable, SearchBox, worker-results sub-view)
         +-- user-detail.js          (StatTile x N, ChartPanel, DataTable)
         +-- workers.js               (DataTable, SearchBox)
         +-- worker-detail.js           (StatTile x N, ChartPanel)
-        +-- ticker.js                    (TickerFeed, EmptyState)
-        +-- search.js                     (SearchBox, DataTable)
-        +-- history.js                     (ChartPanel x N)
+        +-- history.js                  (ChartPanel x N)
 
 Every page module composes from the same component set (Card, DataTable,
 StatTile, ChartPanel, EmptyState, LoadingSkeleton, ErrorBanner) rather
@@ -256,6 +263,50 @@ are deliberately omitted from this diagram, the same way they are marked
 `# future, additive only` there rather than listed alongside the pages
 above — each will compose from this same component set when built, per
 Section 23.
+
+**Phase E Milestone 27 (Human decision):** the Share Ticker and Search
+pages shown in this diagram through Milestone 26 were both retired (see
+Section 9). Their replacements are not new pages:
+
+- **Global Live Feed** (`shell/live-feed-events.js` + `components/
+  live-feed.js`) is owned by `shell.js`, not a page module — mounted once
+  alongside the header/footer and shown on every page regardless of
+  route, satisfying the Human's "must remain visible regardless of which
+  page is open" requirement without its own polling loop (it reacts to
+  the `analytics` field in `core/state.js`, already kept fresh by
+  whichever page is currently mounted, per Section 15). It shows five
+  event types, each with zero backend/schema changes: New Personal Best
+  (reuses `core/live-ticker.js`, relocated from the retired ticker.js),
+  New Best Ever, Best Share Today (both diffed client-side from
+  `pool.best_share_ever` / `pool.best_share_today`), New User, and New
+  Worker (both diffed client-side from the `users`/`workers` dictionary
+  keys). A `FEED_EVENT_TYPES` registry (priority, icon, label) is the
+  extensibility point for a future event type — Block Found, High
+  Difficulty Share, Pool Hashrate Milestone, and Current Network
+  Difficulty were all named in the original brief but have no backing
+  data source anywhere the frontend can reach today, so none of the four
+  were implemented; each is a future milestone's own registry entry, not
+  a placeholder here.
+  - Marquee technique is the Human-approved "Option A": a CSS keyframe
+    loop over a doubled event track (the standard seamless-loop
+    technique), constant px/second speed computed from the real,
+    rendered track width (not a fixed duration) so it feels the same
+    regardless of event count, paused on hover and `:focus-within`, and
+    replaced by a static wrapped list under `prefers-reduced-motion`.
+    Because every render in this codebase rebuilds its whole subtree
+    (Section 6), a poll-driven event arrival visibly resets the scroll
+    position — an explicitly accepted trade-off, not a bug, revisited
+    only if real usage shows it's a problem (the alternative, true
+    incremental DOM patching so the loop never resets, is a materially
+    bigger mechanism no other page in this project needs, deliberately
+    not built speculatively).
+- **Users page search** now matches both usernames and workernames
+  (previously usernames only) — a worker match reuses `workerResultsSpec`/
+  `WORKER_RESULT_COLUMNS`, relocated verbatim from the retired search.js,
+  shown as an additional card alongside (or instead of) the existing
+  Users table depending on which entities the query matches. The Users
+  table's own existing filter behaviour is unchanged when a query matches
+  no workers.
 
 ## 6. JavaScript Module Structure
 
@@ -318,8 +369,6 @@ hand-duplicating a colour palette in JavaScript.
 | User detail | SPA view | `/app/#/users/:username` |
 | Workers (list) | SPA view | `/app/#/workers` |
 | Worker detail | SPA view | `/app/#/workers/:workername` |
-| Share Ticker | SPA view | `/app/#/ticker` |
-| Search | SPA view | `/app/#/search` |
 | Historical Analytics | SPA view | `/app/#/history` |
 | *(future)* Administration | SPA view, auth-gated | `/app/#/admin` |
 | *(future)* Notifications | SPA view | `/app/#/notifications` |
@@ -331,6 +380,18 @@ within Users and Pool Statistics respectively, not separate pages — they
 are slices of data already present in `analytics.json` (`users`,
 `pool.best_share_today` / `best_share_ever`), not new data needs.
 
+**Phase E Milestone 27 (Human decision — global feed and navigation
+simplification):** the Share Ticker and Search pages, both listed above
+through Milestone 26, were retired and removed from this table.
+Ticker's content and purpose were absorbed into a permanent, shell-owned
+Global Live Feed (Section 5) shown on every page regardless of route,
+rather than living on its own page. Search's functionality was embedded
+directly into the Users page's own search box (now cross-entity: it
+matches both usernames and workernames, per Section 5's
+`workerResultsSpec`). `app.js`'s `REDIRECTS` table sends `#/ticker` to
+`#/` and `#/search` to `#/users`, so neither retirement leaves a dead
+route behind.
+
 ## 10. Navigation
 
 A single nav list, defined once in `shell.js`, rendered identically on
@@ -340,6 +401,15 @@ full-app JS on pages that don't need it. Within the dashboard app,
 nav links use `#/...` hashes and are intercepted by `router.js`; the
 active route is highlighted from the current hash on every navigation
 event.
+
+**Phase E Milestone 27 (Human decision):** the nav link list collapses
+behind a hamburger toggle into a dropdown panel at every viewport
+width, not only below 768px as in Milestones 1-26 — reducing the
+navigation surface area everywhere, in support of the Global Live Feed
+(Section 5) becoming a more prominent, defining element of the page.
+The underlying disclosure mechanism (`aria-expanded`, Escape/outside-
+click dismiss) is unchanged; only the CSS breakpoint gating it was
+removed.
 
 ## 11. Routing
 
@@ -482,8 +552,15 @@ site; keeping them as separate components is this architecture's fix.
 - WCAG AA colour contrast is a hard requirement for both themes in the
   Phase C design system — checked then, not deferred.
 - Full keyboard navigability for nav, theme toggle, and search.
-- The ticker (`ticker-feed.js`) uses an ARIA live region so new entries
-  are announced to screen readers, not just appended visually.
+- The Global Live Feed (`components/live-feed.js`, superseding
+  `ticker-feed.js`/`pages/ticker.js` in Milestone 27) uses an ARIA live
+  region so new entries are announced to screen readers, not just
+  appended visually. Its continuously-scrolling track pauses on hover
+  and `:focus-within` (not hover alone — a moving target cannot be
+  reliably tabbed into or clicked otherwise) and is replaced by a
+  static, non-scrolling list under `prefers-reduced-motion`. Each event
+  is a real link (not inert text), so it participates in normal tab
+  order like any other navigation element.
 - Charts are canvas-rendered and not screen-reader accessible by default.
   Each `chart-panel.js` instance is paired with an adjacent accessible
   summary (a short text description or a visually-hidden data table) —
@@ -609,25 +686,35 @@ Illustrative, not final — Phase C owns actual visual design.
 +--------------------------------------------------+
 ```
 
-**Dashboard overview (`/app/#/`)**
+**Dashboard overview (`/app/#/`)** — updated Phase E Milestone 27 (Human
+decision): the horizontal nav became a hamburger dropdown at every
+viewport width, and the Global Live Feed replaced the old Ticker page,
+becoming a permanent band shown on every page directly below the
+header (not an Overview-page side panel — it's identical on every
+route, including this one).
 ```
 +--------------------------------------------------+
-| [logo]  Overview Pool Users Workers Ticker Search |
+| [=] Damopool                                      |
 +--------------------------------------------------+
+| New Personal Best  user.rig  ...  New Best Ever  ...|   <- Global Live
++--------------------------------------------------+      Feed, scrolling
 | [Pool hashrate] [Accepted] [Rejected] [Best today]|
 +--------------------------------------------------+
-| Pool sdiff chart (24h)     |  Live ticker feed    |
-| [        ECharts panel   ] |  user  +12%  09:41   |
-|                             |  user  best  09:38   |
+| Pool sdiff chart (24h)                            |
+| [        ECharts panel   ]                        |
 +--------------------------------------------------+
 | Top users today (table, stacked-card on mobile)   |
 +--------------------------------------------------+
 ```
 
-**User detail (`/app/#/users/:username`)**
+**User detail (`/app/#/users/:username`)** — nav/feed updated the same
+way as the Overview wireframe above; this page's own unique content
+(the back-link, heading, stat tiles, worker list, chart) is unchanged.
 ```
 +--------------------------------------------------+
-| [logo]  Overview Pool Users Workers Ticker Search |
+| [=] Damopool                                      |
++--------------------------------------------------+
+| (Global Live Feed, identical to every other page) |
 +--------------------------------------------------+
 | <- Back to Users        username (truncated)      |
 +--------------------------------------------------+

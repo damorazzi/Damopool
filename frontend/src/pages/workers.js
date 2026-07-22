@@ -40,9 +40,11 @@ export const route = { pattern: "/workers", name: "workers" };
 // existed to link to, mirroring users.js's identical usernameCellSpec
 // (docs/ARCHITECTURE.md Section 23's "add it when a page needs it").
 //
-// Exported so pages/search.js can reuse it verbatim for its own
-// workername-result column -- additive, behaviour-preserving,
-// identical to users.js's own usernameCellSpec export.
+// Exported for reuse by user-detail.js's worker sub-table (Milestone
+// 26) and users.js's own embedded worker-search results (Milestone 27,
+// which relocated pages/search.js's identical column here after that
+// page was retired) -- additive, behaviour-preserving, identical to
+// users.js's own usernameCellSpec export.
 export function workernameCellSpec(row) {
   return el("a", {
     attrs: {

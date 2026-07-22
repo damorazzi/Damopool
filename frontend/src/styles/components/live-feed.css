@@ -1,0 +1,190 @@
+/* Global Live Feed -- docs/DESIGN_SYSTEM.md Section 10.8 (Phase E
+   Milestone 27, superseding the old Ticker Feed spec once
+   pages/ticker.js is retired). Mounted once by shell.js, directly
+   below the header, above every page's own <main> content -- a
+   permanent band, not a per-page component.
+
+   Human's explicit aesthetic direction (Approval Brief point 8): "not
+   a stock market ticker... a professional live operations feed...
+   priority communicated subtly... avoid excessive colour, flashing or
+   animation." Concretely: no background colour on the band itself
+   beyond the existing surface tone, no per-arrival glow/pulse (unlike
+   ticker-feed.css's one-shot arrival animation -- a deliberate
+   simplification for this calmer, always-on surface), and priority is
+   communicated only via icon size / text weight / the existing
+   --color-accent gold token (already the brand's own accent colour,
+   not a new one invented for this) -- never a background fill or
+   border ribbon, which would read as busier/more alert-like than
+   intended. */
+
+.live-feed {
+  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--color-border);
+  padding-block: var(--space-2);
+}
+
+.live-feed__empty {
+  margin: 0;
+  padding-inline: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.live-feed__viewport {
+  overflow: hidden;
+  white-space: nowrap;
+  /* A soft fade at each edge reads as "content continues past the
+     edge" without needing a visible scrollbar or arrow affordance --
+     a calmer signal than either. */
+  mask-image: linear-gradient(to right, transparent, black var(--space-4), black calc(100% - var(--space-4)), transparent);
+}
+
+.live-feed__track {
+  display: inline-flex;
+  align-items: center;
+  list-style: none;
+  /* Duration is set inline by shell.js (a computed --live-feed-duration
+     custom property, derived from the actual track width so scroll
+     speed stays a constant px/second regardless of how many events are
+     showing -- Human: "smoothness is more important than the number of
+     events"). The fallback here only matters for the brief instant
+     before that first measurement runs. */
+  animation: live-feed-scroll var(--live-feed-duration, 30s) linear infinite;
+}
+
+/* Pause on hover (explicitly requested) and on focus-within (the
+   necessary keyboard-equivalent -- a moving target cannot be reliably
+   tabbed into or activated otherwise, and neither touch nor keyboard
+   users get a hover state at all). */
+.live-feed:hover .live-feed__track,
+.live-feed:focus-within .live-feed__track {
+  animation-play-state: paused;
+}
+
+@keyframes live-feed-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* Exactly -50%: the track holds the event list twice back-to-back
+       (components/live-feed.js), so this lands precisely on the start
+       of the second, identical copy -- the seamless-loop technique. */
+    transform: translateX(-50%);
+  }
+}
+
+.live-feed__item {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.live-feed__item:not(:last-child) {
+  margin-inline-end: var(--space-6);
+}
+
+.live-feed__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-4);
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.live-feed__link:hover {
+  text-decoration: underline;
+}
+
+.live-feed__icon {
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+  flex: none;
+}
+
+.live-feed__detail {
+  font-family: var(--font-family-mono);
+  color: var(--color-text-secondary);
+}
+
+/* Human-reported bug, real-browser use: this block (current/previous
+   sdiff, trend indicator) was missing entirely -- every prior place
+   this project has shown a "new best" (the retired ticker-feed.css's
+   own .ticker-feed__current-best/.ticker-feed__trend rules) showed
+   these figures, and they were dropped when this file was written from
+   scratch. Restored with the same colour/numeric-alignment convention
+   ticker-feed.css already established, adapted to this component's
+   horizontal (not vertical-list) layout. */
+.live-feed__current-best {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.live-feed__previous-best {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.live-feed__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.live-feed__trend-value {
+  color: var(--color-success-text);
+}
+
+/* Priority 1 (Block Found / Best Ever / Personal Best in the Human's
+   own classification): slightly larger icon, the brand's existing
+   gold accent colour, slightly heavier text -- all three subtle
+   individually, not combined with any motion or background change. */
+.live-feed__item--priority-1 .live-feed__link {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent-text);
+}
+
+.live-feed__item--priority-1 .live-feed__icon {
+  width: var(--icon-size-lg);
+  height: var(--icon-size-lg);
+}
+
+/* Priority 2 (not yet populated this milestone -- no event type maps
+   to it until a future milestone adds one) is deliberately absent here:
+   "standard styling" per the Human's own spec means the unmodified
+   base .live-feed__link/.live-feed__icon rules above, not a rule of
+   its own. */
+
+/* Priority 3 (informational: Best Share Today, New User, New Worker):
+   muted text colour only -- same icon size and weight as the base
+   style, so the row stays visually even rather than introducing a
+   second size variant. */
+.live-feed__item--priority-3 .live-feed__link {
+  color: var(--color-text-secondary);
+}
+
+.live-feed__item--priority-3 .live-feed__detail {
+  color: var(--color-text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-feed__viewport {
+    overflow: visible;
+    white-space: normal;
+    mask-image: none;
+  }
+
+  .live-feed__track {
+    animation: none;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  /* The duplicate half exists only to support the animated loop --
+     under reduced motion there is no loop, so showing it would just
+     repeat every event a second time in the static, wrapped list. */
+  .live-feed__item--duplicate {
+    display: none;
+  }
+}

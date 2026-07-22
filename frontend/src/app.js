@@ -6,15 +6,15 @@
 // inside `bootstrap()` itself, never at module load).
 //
 // Split the same way as every other DOM-producing module in this
-// project: `ROUTES`/`PAGES`/`notFoundSpec`/`decideNavigation` are
-// pure and fully unit-tested; `bootstrap()` is the thin DOM glue --
+// project: `ROUTES`/`PAGES`/`REDIRECTS`/`notFoundSpec`/`decideNavigation`
+// are pure and fully unit-tested; `bootstrap()` is the thin DOM glue --
 // wiring shell.js's mountShell, core/router.js's createRouter, and
 // each matched page module's mount()/unmount() together -- reviewed
 // by reading, the same tradeoff already made for createRouter,
 // mountShell, and overview.js's own mount()/unmount().
 
 import { el, specToDom } from "./core/dom.js";
-import { createRouter } from "./core/router.js";
+import { createRouter, normalizePath } from "./core/router.js";
 import { mountShell, APP_NAV_ITEMS } from "./shell/shell.js";
 import * as overview from "./pages/overview.js";
 import * as pool from "./pages/pool.js";
@@ -22,18 +22,16 @@ import * as users from "./pages/users.js";
 import * as workers from "./pages/workers.js";
 import * as userDetail from "./pages/user-detail.js";
 import * as workerDetail from "./pages/worker-detail.js";
-import * as search from "./pages/search.js";
-import * as ticker from "./pages/ticker.js";
 import * as history from "./pages/history.js";
 
 // Every future page (docs/ARCHITECTURE.md Section 23) adds one entry
 // to both of these -- its own `route` export and a `{name: module}`
 // entry below -- with no other change required here. Pool/Users/
-// Workers/Search/Ticker/History each already had a nav entry waiting
-// in shell.js's APP_NAV_ITEMS (Milestone 5 anticipated them all);
-// neither detail page does or should -- both are reached by drilling
-// down from their list page (username/workername links), not from the
-// top nav, matching shell.js's own APP_NAV_ITEMS comment.
+// Workers/History each already had a nav entry waiting in shell.js's
+// APP_NAV_ITEMS (Milestone 5 anticipated them all); neither detail
+// page does or should -- both are reached by drilling down from their
+// list page (username/workername links), not from the top nav,
+// matching shell.js's own APP_NAV_ITEMS comment.
 export const ROUTES = [
   overview.route,
   pool.route,
@@ -41,8 +39,6 @@ export const ROUTES = [
   userDetail.route,
   workers.route,
   workerDetail.route,
-  search.route,
-  ticker.route,
   history.route,
 ];
 
@@ -53,10 +49,39 @@ const PAGES = {
   [userDetail.route.name]: userDetail,
   [workers.route.name]: workers,
   [workerDetail.route.name]: workerDetail,
-  [search.route.name]: search,
-  [ticker.route.name]: ticker,
   [history.route.name]: history,
 };
+
+// Phase E Milestone 27: pages/ticker.js and pages/search.js were both
+// retired (superseded by the shell-owned Global Live Feed and by
+// search embedded directly into the Users page, respectively) --
+// Human's explicit instruction was not to leave dead routes behind, so
+// a bookmarked/linked "#/ticker" or "#/search" 404s nowhere: each
+// redirects to its replacement instead. Keyed by the same normalized
+// path parseHash/matchRoute already operate on (a leading slash, no
+// "#"), so this needs no separate decoding logic of its own. A future
+// retired route is one more table entry, matching this file's own
+// ROUTES/PAGES convention.
+export const REDIRECTS = {
+  "/ticker": "/",
+  "/search": "/users",
+};
+
+// Pure: returns the redirect target for `path`, or null if none is
+// registered. Only meaningful when `match` is null (path.js's own
+// matchRoute already found nothing) -- a path that still resolves to a
+// real page is never redirected just because it also happens to appear
+// here (it doesn't, today, but this keeps the two concerns decoupled
+// rather than relying on ROUTES/REDIRECTS never overlapping by
+// convention alone).
+export function resolveRedirect(path) {
+  // Code Review (Milestone 27): normalized the same way matchRoute
+  // itself normalizes a path before matching a route -- without this,
+  // a trailing or repeated slash ("#/ticker/") would silently miss
+  // this plain object-key lookup and fall through to the 404 page
+  // instead of redirecting, unlike a bare "#/ticker".
+  return REDIRECTS[normalizePath(path)] || null;
+}
 
 // Phase E Milestone 23: every page module's mount() has accepted
 // intervalMs/staleAfterMs since Phase D, but this call site never
@@ -170,7 +195,21 @@ export function bootstrap({ target = document.body, mainSelector = "#main-conten
   }
 
   const router = createRouter(ROUTES, {
-    onNavigate(match) {
+    onNavigate(match, path) {
+      // Checked before decideNavigation, and only when nothing actually
+      // matched: a redirect changes the hash and returns without
+      // mounting/unmounting anything itself -- the hashchange this
+      // triggers re-enters this same callback with the real target,
+      // which decideNavigation then handles normally (as a fresh
+      // navigation, same as if a user had clicked a real link to it).
+      if (!match) {
+        const redirectTarget = resolveRedirect(path);
+        if (redirectTarget) {
+          window.location.hash = `#${redirectTarget}`;
+          return;
+        }
+      }
+
       const decision = decideNavigation(match, activePage);
 
       if (decision.unmountPageName && PAGES[decision.unmountPageName]) {

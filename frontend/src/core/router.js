@@ -15,6 +15,19 @@ function splitPath(path) {
   return path.split("/").filter((segment) => segment !== "");
 }
 
+// Phase E Milestone 27, Code Review finding: app.js's REDIRECTS table
+// originally looked up a path with a plain object-key match, which --
+// unlike matchRoute below -- doesn't tolerate a trailing slash or
+// repeated slashes ("#/ticker/" would silently fail to match "/ticker"
+// and fall through to the 404 page instead of redirecting). Exported
+// so a lookup table keyed by normalized path (not matched via
+// matchRoute's own routes array) can apply the identical normalization
+// matchRoute already gives every real route, rather than duplicating
+// or drifting from splitPath's own segment-filtering logic.
+export function normalizePath(path) {
+  return `/${splitPath(path).join("/")}`;
+}
+
 // routes: an array of { pattern, ...anything else the caller wants
 // attached to the matched route }. First match wins, so static routes
 // should be listed before an overlapping dynamic one if both could

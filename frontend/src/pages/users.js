@@ -29,6 +29,20 @@
 // input for the actual, still-focused live one before inserting the
 // new tree, the same technique overview.js/pool.js use to keep a
 // chart's canvas node alive across a same-status re-render.
+//
+// Phase E Milestone 27: the dedicated Search page was retired (Human
+// instruction: "move Search functionality into the Users page... reuse
+// the existing Search page implementation wherever practical"). This
+// page's own search box previously only ever filtered its own user
+// table by username -- it now also searches workernames, reusing
+// pages/search.js's own already-reviewed worker-results panel
+// (workerResultsSpec/WORKER_RESULT_COLUMNS below, relocated here
+// verbatim since this is their only remaining caller) rather than
+// redesigning anything. Deliberately minimal-diff: the existing user
+// table/filter behaviour above is completely unchanged when the query
+// matches no workers or the query box is empty -- a worker-matches
+// card only ever appears *in addition*, never replacing the user
+// table's own established behaviour.
 
 import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
@@ -42,6 +56,8 @@ import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
 import { errorBannerSpec } from "../components/error-banner.js";
 import { dataTableSpec } from "../components/data-table.js";
 import { searchBoxSpec } from "../components/search-box.js";
+import { badgeSpec } from "../components/badge.js";
+import { transformWorkersData, filterWorkersByQuery, formatWorkerRow, workernameCellSpec } from "./workers.js";
 
 const ANALYTICS_ENDPOINT = "/analytics.json";
 
@@ -58,10 +74,13 @@ export const route = { pattern: "/users", name: "users" };
 // <td>, and font-family inherits down to this anchor without needing
 // its own copy of the class.
 //
-// Exported (not just used internally) so pages/search.js can reuse it
-// verbatim for its own username-result column rather than
-// reimplementing an identical link cell -- a behaviour-preserving,
-// additive change: existing internal usage below is unaffected.
+// Exported since pages/search.js reused it verbatim for its own
+// username-result column (Milestone 25) until that page was retired
+// (Milestone 27, superseded by this page's own embedded search). No
+// external caller needs it today, but left exported rather than
+// un-exported-then-re-exported if a future page ends up needing an
+// identical username link cell -- the same low-cost-to-leave
+// reasoning workers.js's own workernameCellSpec export already used.
 export function usernameCellSpec(row) {
   return el("a", {
     attrs: {
@@ -86,6 +105,17 @@ const USER_COLUMNS = [
   { key: "avgSdiff", label: "Avg Sdiff", align: "right" },
   { key: "bestToday", label: "Best Today", align: "right" },
   { key: "bestEver", label: "Best Ever", align: "right" },
+];
+
+// Relocated verbatim from pages/search.js (Phase E Milestone 27, that
+// page's retirement) -- this page is now WORKER_RESULT_COLUMNS' only
+// caller. Deliberately the same reduced 2-column set search.js used
+// (vs. workers.js's own full 9-column WORKER_COLUMNS): a worker match
+// surfaced from this page's search box is a lightweight index pointing
+// at Worker Detail, not a replacement for the Workers list page itself.
+const WORKER_RESULT_COLUMNS = [
+  { key: "workername", label: "Workername", mono: true, render: workernameCellSpec },
+  { key: "status", label: "Status", render: (row) => badgeSpec({ variant: row.isActive ? "active" : "inactive" }) },
 ];
 
 // -------------------------------------------------------------------
@@ -114,6 +144,13 @@ export function transformUsersData(payload) {
   return {
     generatedAt: (payload && payload.metadata && payload.metadata.generated_at) || null,
     rows,
+    // Reuses workers.js's own transform over the same already-fetched
+    // payload -- no second network request, exactly the reasoning
+    // pages/search.js's own transformSearchData already established
+    // for cross-entity search (Milestone 27: relocated here from that
+    // page). Unused when the search box has no active query (see
+    // buildUsersSpec below).
+    workerRows: transformWorkersData(payload).rows,
   };
 }
 
@@ -176,6 +213,21 @@ function loadingSectionSpec() {
   });
 }
 
+// Relocated verbatim from pages/search.js (Milestone 27) -- unchanged
+// behaviour, just a new (and now only) caller.
+function workerResultsSpec(workerResults) {
+  return cardSpec({
+    title: "Workers",
+    children: [
+      dataTableSpec({
+        caption: "Matching workers",
+        columns: WORKER_RESULT_COLUMNS,
+        rows: workerResults.map(formatWorkerRow),
+      }),
+    ],
+  });
+}
+
 export function buildUsersSpec(state) {
   const heading = el("h1", { className: "users-page__title", text: "Users" });
 
@@ -213,15 +265,35 @@ export function buildUsersSpec(state) {
   }
 
   const query = state.searchQuery || "";
+  const trimmedQuery = query.trim();
   const filteredRows = filterUsersByQuery(state.data.rows, query);
-  const searchBox = searchBoxSpec({ value: query, placeholder: "Search users", label: "Search users" });
+  // Only searched while a query is active -- matching pages/search.js's
+  // own "no query yet" convention (Milestone 27), not the empty-query
+  // "return every row" behaviour filterUsersByQuery/filterWorkersByQuery
+  // otherwise have, which would otherwise turn every worker into a
+  // permanent, always-visible second panel below the Users table.
+  const workerMatches = trimmedQuery ? filterWorkersByQuery(state.data.workerRows, query) : [];
+  const searchBox = searchBoxSpec({
+    value: query,
+    placeholder: "Search users or workers",
+    label: "Search users or workers",
+  });
 
-  const content =
-    query.trim() && filteredRows.length === 0
-      ? cardSpec({
-          children: [emptyStateSpec({ message: `No users match "${query.trim()}".` })],
-        })
-      : cardSpec({
+  let content;
+  if (trimmedQuery && filteredRows.length === 0 && workerMatches.length === 0) {
+    content = cardSpec({
+      children: [emptyStateSpec({ message: `No matches found for "${trimmedQuery}".` })],
+    });
+  } else {
+    const panels = [];
+    // filteredRows is only ever empty here when trimmedQuery is truthy
+    // (an empty query never filters anything out, and status "empty"
+    // -- zero users at all -- already returned above) -- so on the
+    // page's default, no-query view this always renders, unwrapped,
+    // exactly like every prior milestone's Users page.
+    if (filteredRows.length > 0) {
+      panels.push(
+        cardSpec({
           title: "Users",
           children: [
             dataTableSpec({
@@ -230,7 +302,14 @@ export function buildUsersSpec(state) {
               rows: filteredRows.map(formatUserRow),
             }),
           ],
-        });
+        }),
+      );
+    }
+    if (workerMatches.length > 0) {
+      panels.push(workerResultsSpec(workerMatches));
+    }
+    content = panels.length > 1 ? el("div", { className: "users-page__results", children: panels }) : panels[0];
+  }
 
   return el("div", {
     className: "users-page",

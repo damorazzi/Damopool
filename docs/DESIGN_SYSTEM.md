@@ -451,24 +451,49 @@ Active link: text in `--color-accent` (dark theme) / `--color-accent-text`
 (light theme) plus a `2px` bottom border in `--color-accent` (a border is
 non-text, so it can stay the brighter fill colour on both themes,
 Section 4.3) — no background pill, keeping the header visually quiet
-per Section 2's restraint principle. Below `768px`, the nav link list
-collapses behind a hamburger control (Section 8's icon set) into a
-full-width dropdown panel using `--color-surface` and
-`--duration-base`/`--ease-standard` for the open/close transition.
+per Section 2's restraint principle. The nav link list collapses behind
+a hamburger control (Section 8's icon set) into a full-width dropdown
+panel using `--color-surface`, at every viewport width (Phase E
+Milestone 27 — previously a `<768px`-only pattern; the Human decision
+was to reduce the navigation surface area everywhere, not only on
+narrow viewports).
 
-### 10.8 Ticker Feed
+### 10.8 Global Live Feed
 
-A vertical list of entries inside a card, each entry: workername
-(`--font-family-mono`, per Section 5), the improvement figure (coloured
-text, so it follows Section 4.3's rule — `--color-success` on dark theme,
-`--color-success-text` on light theme — plus a trend-up icon), and a
-relative timestamp
-(`--font-size-xs`, `--color-text-secondary`). The container is an ARIA
-live region (`docs/ARCHITECTURE.md` Section 17); a newly-arrived entry
-gets the fade/slide-in motion from Section 9 plus one cycle of the
-`--glow-accent` highlight (Section 7), then settles into the plain entry
-style — so the "new arrival" signal is temporary and doesn't accumulate
-into a permanently glowing list.
+Superseded the Ticker Feed spec (Phase E Milestone 27, Human decision —
+the dedicated Ticker page was retired in favour of a permanent,
+shell-owned status band shown on every page). Not a card, not a vertical
+list: a full-width horizontal band directly below the header, above
+every page's own content, its event track scrolling continuously
+(`--live-feed-duration`, computed from the real track width so
+px/second speed stays constant regardless of event count, not a fixed
+duration). Deliberately calmer than the retired Ticker Feed's own
+per-arrival animation — "a professional live operations feed, not a
+stock market ticker" (the Human's own framing): no glow/pulse on
+arrival, no background fill, no border ribbon.
+
+Priority is the only visual differentiation, and it is subtle by
+design:
+- **Priority 1** (New Personal Best, New Best Ever): `--color-accent-text`
+  (the brand's existing gold token, not a new one), `--font-weight-semibold`,
+  and a slightly larger icon (`--icon-size-lg` vs. the base `--icon-size-md`).
+- **Priority 2**: unmodified base style — reserved for a future event
+  type, none exists yet.
+- **Priority 3** (Best Share Today, New User, New Worker): `--color-text-secondary`
+  only, same icon size and weight as the base style.
+
+Each event is a real link (`docs/ARCHITECTURE.md` Section 5's per-type
+navigation target — e.g. New Personal Best → Worker Detail, New Best
+Ever/Best Share Today → Pool), not inert text — "should feel like a
+navigation component, not simply an animated banner" (Human, Milestone
+27). The container carries an ARIA live region (`docs/ARCHITECTURE.md`
+Section 17) exactly like the retired Ticker Feed did, so a new arrival
+is still announced to screen readers. The track pauses on hover and
+`:focus-within`, and is replaced by a static, non-scrolling, wrapped
+list under `prefers-reduced-motion` — a dedicated override, not the
+`--duration-slow: 0ms` token trick the retired Ticker Feed's one-shot
+arrival animation used, since zeroing an *infinite* animation's
+duration does not produce a paused/static result.
 
 ### 10.9 Badges / Status Indicators
 
