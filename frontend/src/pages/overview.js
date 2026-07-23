@@ -30,13 +30,14 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatHashrate, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatHashrate, formatProgressPercent, formatStillNeededMultiplier, formatRelativeTime } from "../core/format.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
 import { emptyStateSpec } from "../components/empty-state.js";
 import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
 import { errorBannerSpec } from "../components/error-banner.js";
 import { histogramPanelSpec } from "../components/histogram-panel.js";
+import { blockProgressPanelSpec, emptyBlockProgress } from "../components/block-progress-panel.js";
 import { createChart } from "../charts/chart.js";
 import { buildEChartsTheme, readThemeTokens } from "../charts/theme-echarts.js";
 import {
@@ -89,6 +90,12 @@ export function transformOverviewData(payload) {
     // recomputed client-side (Human Approval Brief).
     difficultyHistogram: pool.difficulty_histogram || emptyHistogramDatasetPair(),
     networkDifficulty: pool.network_difficulty,
+    // Phase E Milestone 30: Block Progress Analytics -- how the pool's
+    // own best solved share compares to the current network difficulty.
+    // Purely informational (explicit Human requirement: no prediction,
+    // no probability estimate) -- read verbatim from analytics.json,
+    // never recomputed client-side.
+    blockProgress: pool.block_progress || emptyBlockProgress(),
   };
 }
 
@@ -178,11 +185,33 @@ function histogramSectionSpec(data, histogramDataset) {
   });
 }
 
+// Phase E Milestone 30: the one Block Progress panel shared, byte-
+// identical logic-wise, with user-detail.js/worker-detail.js -- only
+// the underlying scope's own block_progress data differs per page.
+// formatCompactSdiff is "the existing difficulty formatter" (Human
+// requirement) for both difficulty values; progress_percent/
+// still_needed_multiplier get their own new, dedicated formatters
+// (core/format.js) since neither existing formatter's rules match what
+// this feature specifies.
+function blockProgressSectionSpec(data) {
+  const bp = data.blockProgress;
+  return blockProgressPanelSpec({
+    networkDifficultyText: formatCompactSdiff(bp.network_difficulty),
+    bestShareText: formatCompactSdiff(bp.best_share_difficulty),
+    progressPercentText: formatProgressPercent(bp.progress_percent),
+    stillNeededText: formatStillNeededMultiplier(bp.still_needed_multiplier),
+  });
+}
+
 function loadingSectionSpec() {
   return el("div", {
     className: "overview-page__loading",
     children: [
       loadingSkeletonSpec({ shape: "tile", count: 6, className: "tile-grid" }),
+      // Milestone 28's own Code Review lesson applied proactively here:
+      // match the skeleton's tile count to the real Block Progress
+      // panel's 4 tiles, so there's no layout shift once data arrives.
+      loadingSkeletonSpec({ shape: "tile", count: 4, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "block", height: 320 }),
     ],
   });
@@ -248,6 +277,7 @@ export function buildOverviewSpec(state) {
       heading,
       ...banners,
       statTilesSectionSpec(state.data),
+      blockProgressSectionSpec(state.data),
       histogramSectionSpec(state.data, state.histogramDataset || DEFAULT_HISTOGRAM_DATASET),
     ],
   });

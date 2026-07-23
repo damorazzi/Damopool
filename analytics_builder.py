@@ -9,13 +9,13 @@ from parse_share_analytics import LOGS_DIR, find_sharelog_files
 import analytics_state
 import ckpool_native_stats
 import histogram_builder
+import block_progress
 
-# Phase E Milestone 29: additive, backward-compatible schema change
-# (difficulty_histogram on pool/users/workers, network_difficulty on
-# pool) -- bumped the minor version again per this project's own
-# versioning discipline (Milestone 28 bumped 1.1 -> 1.2 for the same
-# reason).
-SCHEMA_VERSION = "1.3"
+# Phase E Milestone 30: additive, backward-compatible schema change
+# (block_progress on pool/users/workers) -- bumped the minor version
+# again per this project's own versioning discipline (Milestone 29
+# bumped 1.2 -> 1.3 for the same reason).
+SCHEMA_VERSION = "1.4"
 GENERATOR = "analytics_builder.py"
 ANALYTICS_OUTPUT_PATH = "/home/damopool/ckpool-solo/ckpool/analytics.json"
 
@@ -66,24 +66,47 @@ def build_analytics(logs_dir=None, now=None, state_path=None, histogram_state_pa
     # begin with, so there's nothing to merge onto.
     histograms = histogram_builder.build_histograms(logs_dir, now, state_path=histogram_state_path)
 
+    # Milestone 30: Block Progress Analytics -- a pure derived computation
+    # from values already produced above (each scope's own best_share_ever
+    # sdiff, and the single pool-wide network_difficulty), needing no new
+    # data source or incremental state of its own. See block_progress.py's
+    # own module comment for why it's still a dedicated module rather than
+    # inlined here.
+    def best_sdiff(record):
+        best_share_ever = record.get("best_share_ever")
+        return best_share_ever["sdiff"] if best_share_ever else None
+
     pool_out = {
         **merged["pool"],
         **native["pool"],
         "network_difficulty": network_difficulty,
         "difficulty_histogram": histograms["pool"],
+        "block_progress": block_progress.compute_block_progress(best_sdiff(merged["pool"]), network_difficulty),
     }
 
     users_out = {}
     for username, record in merged["users"].items():
         user_native = native["users"].get(username, dict(_EMPTY_HASHRATES))
         user_histogram = histograms["users"].get(username, histogram_builder.empty_histogram_dataset_pair())
-        users_out[username] = {**record, **user_native, "difficulty_histogram": user_histogram}
+        user_block_progress = block_progress.compute_block_progress(best_sdiff(record), network_difficulty)
+        users_out[username] = {
+            **record,
+            **user_native,
+            "difficulty_histogram": user_histogram,
+            "block_progress": user_block_progress,
+        }
 
     workers_out = {}
     for workername, record in merged["workers"].items():
         worker_native = native["workers"].get(workername, dict(_EMPTY_HASHRATES))
         worker_histogram = histograms["workers"].get(workername, histogram_builder.empty_histogram_dataset_pair())
-        workers_out[workername] = {**record, **worker_native, "difficulty_histogram": worker_histogram}
+        worker_block_progress = block_progress.compute_block_progress(best_sdiff(record), network_difficulty)
+        workers_out[workername] = {
+            **record,
+            **worker_native,
+            "difficulty_histogram": worker_histogram,
+            "block_progress": worker_block_progress,
+        }
 
     metadata = {
         "schema_version": SCHEMA_VERSION,

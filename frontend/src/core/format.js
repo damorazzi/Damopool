@@ -134,6 +134,35 @@ export function formatPercentage(value) {
   return `${sign}${value.toFixed(1)}%`;
 }
 
+// Phase E Milestone 30 (Block Progress Analytics): deliberately distinct
+// from formatPercentage above -- that one is signed, fixed-1-decimal
+// daily-improvement text; this one is unsigned (a progress ratio is
+// never negative by the time it reaches here -- block_progress.py's own
+// null-guarding already excludes negative/zero inputs) and uses a
+// variable precision so a very small, realistic progress value (a solo
+// miner's best share is typically a tiny fraction of a percent of the
+// network target) doesn't round away to "0.00%": four decimal places
+// below 1%, two decimal places at or above it.
+export function formatProgressPercent(value) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  const decimals = Math.abs(value) < 1 ? 4 : 2;
+  return `${value.toFixed(decimals)}%`;
+}
+
+// "Still Needed" (Block Progress Analytics): how many times larger the
+// best share would need to be to reach network difficulty -- rounded to
+// the nearest whole number (a fractional multiplier reads as false
+// precision here), thousands-separated, prefixed with "x" per the
+// Human-approved wording.
+export function formatStillNeededMultiplier(value) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return `×${Math.round(value).toLocaleString("en-US")}`;
+}
+
 // Absolute local time, e.g. "09:41" -- matches the ticker/wireframe
 // display in docs/ARCHITECTURE.md Section 22.
 export function formatTimestamp(isoString) {

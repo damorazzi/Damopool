@@ -27,7 +27,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatHashrate, formatPercentage, formatRelativeTime, truncateAddress } from "../core/format.js";
+import { formatCompactSdiff, formatHashrate, formatPercentage, formatProgressPercent, formatStillNeededMultiplier, formatRelativeTime, truncateAddress } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -35,6 +35,7 @@ import { emptyStateSpec } from "../components/empty-state.js";
 import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
 import { errorBannerSpec } from "../components/error-banner.js";
 import { histogramPanelSpec } from "../components/histogram-panel.js";
+import { blockProgressPanelSpec, emptyBlockProgress } from "../components/block-progress-panel.js";
 import { dataTableSpec } from "../components/data-table.js";
 import { badgeSpec } from "../components/badge.js";
 import { createChart } from "../charts/chart.js";
@@ -146,6 +147,12 @@ export function transformUserDetailData(payload, username) {
     // rather than duplicated onto every user record.
     difficultyHistogram: record.difficulty_histogram || emptyHistogramDatasetPair(),
     networkDifficulty: payload && payload.pool && payload.pool.network_difficulty,
+    // Phase E Milestone 30: Block Progress Analytics -- unlike
+    // difficulty_histogram, this IS present per-scope (each of
+    // pool/users[...]/workers[...] carries its own block_progress, each
+    // already including the current pool-wide network_difficulty), so
+    // no cross-reference into payload.pool is needed here.
+    blockProgress: record.block_progress || emptyBlockProgress(),
   };
 }
 
@@ -261,6 +268,18 @@ function histogramSectionSpec(data, histogramDataset) {
   });
 }
 
+// Phase E Milestone 30: the one Block Progress panel shared, byte-
+// identical logic-wise, with overview.js/worker-detail.js.
+function blockProgressSectionSpec(data) {
+  const bp = data.blockProgress;
+  return blockProgressPanelSpec({
+    networkDifficultyText: formatCompactSdiff(bp.network_difficulty),
+    bestShareText: formatCompactSdiff(bp.best_share_difficulty),
+    progressPercentText: formatProgressPercent(bp.progress_percent),
+    stillNeededText: formatStillNeededMultiplier(bp.still_needed_multiplier),
+  });
+}
+
 function workerListSpec(workerRows) {
   if (workerRows.length === 0) {
     return cardSpec({
@@ -285,6 +304,7 @@ function loadingSectionSpec() {
     className: "user-detail-page__loading",
     children: [
       loadingSkeletonSpec({ shape: "tile", count: 9, className: "tile-grid" }),
+      loadingSkeletonSpec({ shape: "tile", count: 4, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "row", count: 3 }),
       loadingSkeletonSpec({ shape: "block", height: 320 }),
     ],
@@ -336,6 +356,7 @@ export function buildUserDetailSpec(state) {
       headerSpec(state.username),
       ...banners,
       statTilesSectionSpec(state.data),
+      blockProgressSectionSpec(state.data),
       el("div", {
         className: "split-layout",
         children: [

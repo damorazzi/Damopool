@@ -5,6 +5,8 @@ import {
   formatCompactSdiff,
   formatHashrate,
   formatPercentage,
+  formatProgressPercent,
+  formatStillNeededMultiplier,
   formatTimestamp,
   formatRelativeTime,
   truncateAddress,
@@ -191,6 +193,60 @@ test("formatPercentage", async (t) => {
   await t.test("returns null for Infinity/-Infinity, not a rendered symbol", () => {
     assert.equal(formatPercentage(Infinity), null);
     assert.equal(formatPercentage(-Infinity), null);
+  });
+});
+
+test("formatProgressPercent (Phase E Milestone 30: Block Progress Analytics)", async (t) => {
+  await t.test("4 decimal places below 1%", () => {
+    assert.equal(formatProgressPercent(0.0227), "0.0227%");
+    assert.equal(formatProgressPercent(0.4382), "0.4382%");
+  });
+
+  await t.test("2 decimal places at or above 1%", () => {
+    assert.equal(formatProgressPercent(3.47), "3.47%");
+    assert.equal(formatProgressPercent(18.92), "18.92%");
+    assert.equal(formatProgressPercent(1), "1.00%");
+  });
+
+  await t.test("no sign is ever added, unlike formatPercentage", () => {
+    assert.equal(formatProgressPercent(3.47), "3.47%");
+    assert.ok(!formatProgressPercent(3.47).startsWith("+"));
+  });
+
+  await t.test("zero is 4-decimal (below the 1% threshold)", () => {
+    assert.equal(formatProgressPercent(0), "0.0000%");
+  });
+
+  await t.test("returns null for null/undefined/NaN/wrong-type/Infinity", () => {
+    assert.equal(formatProgressPercent(null), null);
+    assert.equal(formatProgressPercent(undefined), null);
+    assert.equal(formatProgressPercent(NaN), null);
+    assert.equal(formatProgressPercent("3.47"), null);
+    assert.equal(formatProgressPercent(Infinity), null);
+    assert.equal(formatProgressPercent(-Infinity), null);
+  });
+});
+
+test("formatStillNeededMultiplier (Phase E Milestone 30: Block Progress Analytics)", async (t) => {
+  await t.test("prefixes with x and uses thousands separators", () => {
+    assert.equal(formatStillNeededMultiplier(2), "×2");
+    assert.equal(formatStillNeededMultiplier(15), "×15");
+    assert.equal(formatStillNeededMultiplier(437), "×437");
+    assert.equal(formatStillNeededMultiplier(4406), "×4,406");
+  });
+
+  await t.test("rounds to the nearest whole number", () => {
+    assert.equal(formatStillNeededMultiplier(4405.5), "×4,406");
+    assert.equal(formatStillNeededMultiplier(4405.49), "×4,405");
+  });
+
+  await t.test("returns null for null/undefined/NaN/wrong-type/Infinity", () => {
+    assert.equal(formatStillNeededMultiplier(null), null);
+    assert.equal(formatStillNeededMultiplier(undefined), null);
+    assert.equal(formatStillNeededMultiplier(NaN), null);
+    assert.equal(formatStillNeededMultiplier("437"), null);
+    assert.equal(formatStillNeededMultiplier(Infinity), null);
+    assert.equal(formatStillNeededMultiplier(-Infinity), null);
   });
 });
 

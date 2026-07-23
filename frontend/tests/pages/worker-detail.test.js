@@ -19,7 +19,7 @@ function emptyBucketData() {
 
 function fullPayload(overrides = {}) {
   return {
-    metadata: { schema_version: "1.3", generated_at: new Date().toISOString(), ...overrides.metadata },
+    metadata: { schema_version: "1.4", generated_at: new Date().toISOString(), ...overrides.metadata },
     pool: { network_difficulty: 127170500429035.2, ...overrides.pool },
     users: {},
     workers: {
@@ -40,6 +40,12 @@ function fullPayload(overrides = {}) {
         hashrate_1m: 5000000000000,
         hashrate_24h: 6000000000000,
         difficulty_histogram: { "1d": emptyBucketData(), total: emptyBucketData() },
+        block_progress: {
+          best_share_difficulty: 28_600_000_000,
+          network_difficulty: 126_000_000_000_000,
+          progress_percent: 0.0227,
+          still_needed_multiplier: 4406,
+        },
         ...overrides.rig1Record,
       },
       ...overrides.workers,
@@ -59,6 +65,16 @@ function findByClassName(spec, className) {
     if (found) return found;
   }
   return null;
+}
+
+function findAllByClassName(spec, className, acc = []) {
+  if (!spec || typeof spec !== "object") return acc;
+  const classes = (spec.className || "").split(" ");
+  if (classes.includes(className)) acc.push(spec);
+  for (const child of spec.children || []) {
+    findAllByClassName(child, className, acc);
+  }
+  return acc;
 }
 
 test("route", async (t) => {
@@ -109,6 +125,22 @@ test("transformWorkerDetailData", async (t) => {
   await t.test("a missing difficulty_histogram on this worker's record degrades to an empty (all-zero) shape", () => {
     const data = transformWorkerDetailData(fullPayload({ rig1Record: { difficulty_histogram: undefined } }), "rig1");
     assert.ok(data.difficultyHistogram["1d"].bucket_counts.every((c) => c === 0));
+  });
+
+  await t.test("Phase E Milestone 30: extracts this worker's own block_progress verbatim", () => {
+    const payload = fullPayload();
+    const data = transformWorkerDetailData(payload, "rig1");
+    assert.deepEqual(data.blockProgress, payload.workers.rig1.block_progress);
+  });
+
+  await t.test("a missing block_progress on this worker's record degrades to an all-null shape", () => {
+    const data = transformWorkerDetailData(fullPayload({ rig1Record: { block_progress: undefined } }), "rig1");
+    assert.deepEqual(data.blockProgress, {
+      best_share_difficulty: null,
+      network_difficulty: null,
+      progress_percent: null,
+      still_needed_multiplier: null,
+    });
   });
 
   await t.test("degrades gracefully when fields are missing", () => {
@@ -230,6 +262,23 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.equal(findByClassName(spec, "data-table"), null, "worker-detail.js has no DataTable per Section 5");
     assert.equal(findByClassName(spec, "split-layout"), null, "worker-detail.js has no split-layout per Section 5");
     assert.equal(findByClassName(spec, "error-banner"), null);
+  });
+
+  await t.test("Phase E Milestone 30: renders the Block Progress panel with correctly formatted values", () => {
+    const data = transformWorkerDetailData(fullPayload(), "rig1");
+    const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
+    const panel = findByClassName(spec, "block-progress-panel");
+    assert.ok(panel, "expected a Block Progress panel on Worker Detail");
+    assert.equal(findByClassName(panel, "card__header").text, "Block Progress");
+
+    const tiles = findAllByClassName(panel, "stat-tile");
+    const labels = tiles.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tiles.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    assert.deepEqual(labels, ["Current Network Difficulty", "Best Share", "Block Progress", "Still Needed"]);
+    assert.equal(values[0], "126T");
+    assert.equal(values[1], "28.6G");
+    assert.equal(values[2], "0.0227%");
+    assert.equal(values[3], "×4,406");
   });
 
   await t.test("Phase E Milestone 28: Worker Hashrate (1m)/(24h) tiles render with compact-formatted values", () => {

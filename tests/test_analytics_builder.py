@@ -597,13 +597,13 @@ class TestLiveTicker(TempLogDirMixin, unittest.TestCase):
 # 7b. Phase E Milestone 28: native CKPool hashrate merge
 # ---------------------------------------------------------------------------
 class TestNativeHashrateMerge(TempLogDirMixin, unittest.TestCase):
-    def test_schema_version_bumped_to_1_3(self):
-        # Milestone 29 bumped schema_version again (1.2 -> 1.3) for the
-        # additive difficulty_histogram/network_difficulty fields; this
-        # test's own subject (native hashrate merge) is unaffected.
+    def test_schema_version_bumped_to_1_4(self):
+        # Milestone 30 bumped schema_version again (1.3 -> 1.4) for the
+        # additive block_progress field; this test's own subject (native
+        # hashrate merge) is unaffected.
         now = datetime(2026, 7, 16, tzinfo=timezone.utc)
         data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
-        self.assertEqual(data["metadata"]["schema_version"], "1.3")
+        self.assertEqual(data["metadata"]["schema_version"], "1.4")
 
     def test_pool_hashrate_merged_from_pool_status(self):
         now = datetime(2026, 7, 16, tzinfo=timezone.utc)
@@ -671,6 +671,81 @@ class TestNativeHashrateMerge(TempLogDirMixin, unittest.TestCase):
             "alice", hashrate1m="9.84T", hashrate1d="10.4T",
             workers=[{"workername": "alice.rig1", "hashrate1m": "9.84T", "hashrate1d": "10.4T"}],
         )
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        json.dumps(data)  # must serialize cleanly
+
+
+# ---------------------------------------------------------------------------
+# 7b(2). Phase E Milestone 30: Block Progress Analytics merge
+# ---------------------------------------------------------------------------
+class TestBlockProgressMerge(TempLogDirMixin, unittest.TestCase):
+    def write_network_diff_log(self, value):
+        with open(os.path.join(self.tmpdir, "ckpool.log"), "w") as f:
+            f.write(f"[2026-07-14 23:28:00.690] Network diff set to {value}\n")
+
+    def test_pool_block_progress_computed_from_best_share_ever_and_network_difficulty(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(createdate=cd(int(now.timestamp())), result=True, sdiff=28_600_000_000.0)])
+        self.write_network_diff_log(126_000_000_000_000.0)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        bpg = data["pool"]["block_progress"]
+        self.assertAlmostEqual(bpg["best_share_difficulty"], 28_600_000_000.0)
+        self.assertAlmostEqual(bpg["network_difficulty"], 126_000_000_000_000.0, delta=1)
+        self.assertAlmostEqual(bpg["progress_percent"], (28_600_000_000.0 / 126_000_000_000_000.0) * 100, delta=1e-6)
+        self.assertAlmostEqual(bpg["still_needed_multiplier"], 126_000_000_000_000.0 / 28_600_000_000.0, delta=1e-6)
+
+    def test_user_and_worker_each_get_their_own_block_progress_against_the_same_pool_wide_network_difficulty(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp())), sdiff=500.0),
+        ])
+        self.write_network_diff_log(1000.0)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertAlmostEqual(data["users"]["alice"]["block_progress"]["network_difficulty"], 1000.0, delta=1)
+        self.assertAlmostEqual(data["workers"]["alice.rig1"]["block_progress"]["network_difficulty"], 1000.0, delta=1)
+        self.assertAlmostEqual(data["users"]["alice"]["block_progress"]["progress_percent"], 50.0, delta=1e-6)
+        self.assertAlmostEqual(data["workers"]["alice.rig1"]["block_progress"]["progress_percent"], 50.0, delta=1e-6)
+
+    def test_block_progress_is_null_ratios_when_network_difficulty_never_observed(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [make_share(createdate=cd(int(now.timestamp())), sdiff=500.0)])
+        # No ckpool.log written at all.
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        bpg = data["pool"]["block_progress"]
+        self.assertAlmostEqual(bpg["best_share_difficulty"], 500.0)
+        self.assertIsNone(bpg["network_difficulty"])
+        self.assertIsNone(bpg["progress_percent"])
+        self.assertIsNone(bpg["still_needed_multiplier"])
+
+    def test_block_progress_is_null_ratios_when_scope_has_never_solved_a_share(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        # No sharelog data at all -- an empty pool.
+        self.write_network_diff_log(126_000_000_000_000.0)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        bpg = data["pool"]["block_progress"]
+        self.assertIsNone(bpg["best_share_difficulty"])
+        self.assertAlmostEqual(bpg["network_difficulty"], 126_000_000_000_000.0, delta=1)
+        self.assertIsNone(bpg["progress_percent"])
+        self.assertIsNone(bpg["still_needed_multiplier"])
+
+    def test_every_user_and_worker_entry_always_has_a_well_formed_block_progress_key(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp()))),
+        ])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        for scope in (data["pool"], data["users"]["alice"], data["workers"]["alice.rig1"]):
+            self.assertIn("block_progress", scope)
+            self.assertEqual(set(scope["block_progress"].keys()), {
+                "best_share_difficulty", "network_difficulty", "progress_percent", "still_needed_multiplier",
+            })
+
+    def test_full_output_still_json_serializable_with_block_progress_present(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp())), sdiff=500.0),
+        ])
+        self.write_network_diff_log(126_000_000_000_000.0)
         data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         json.dumps(data)  # must serialize cleanly
 

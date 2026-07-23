@@ -545,6 +545,23 @@ elsewhere (Section 10.3's card footer slot, `docs/ARCHITECTURE.md`
 Section 15), and an external link (Section 8's `external-link` icon) to
 the project's public repository.
 
+### 10.12 Block Progress Panel
+
+`frontend/src/components/block-progress-panel.js` (Phase E Milestone
+30). A titled card ("Block Progress") whose body is a `.tile-grid` of
+four Stat Tiles (Section 10.5) — no gauge, no progress bar, no
+animation, no chart: an explicit Human requirement that this stays a
+plain information panel, not a visualization. Shown identically on
+Overview, User Detail, and Worker Detail, directly below each page's own
+stat-tile grid. Two of the four tiles ("Block Progress", "Still
+Needed") carry an explanatory tooltip via the native `title` attribute
+on the tile's label — the same plain-HTML-tooltip idiom Section 10.8's
+Global Live Feed already uses (`title`/`aria-label` pairing), not a new
+custom tooltip UI component. Reuses Stat Tiles' exact visual markup via
+a small local equivalent rather than modifying `stat-tile.js` itself
+(Human requirement: no existing functionality changed) — the two are
+visually indistinguishable.
+
 ## 11. Responsive Layout Grids
 
 Matches `docs/ARCHITECTURE.md` Section 12's breakpoints exactly (this

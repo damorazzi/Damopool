@@ -24,7 +24,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatHashrate, formatRelativeTime, truncateWorkername } from "../core/format.js";
+import { formatCompactSdiff, formatHashrate, formatProgressPercent, formatStillNeededMultiplier, formatRelativeTime, truncateWorkername } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -32,6 +32,7 @@ import { emptyStateSpec } from "../components/empty-state.js";
 import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
 import { errorBannerSpec } from "../components/error-banner.js";
 import { histogramPanelSpec } from "../components/histogram-panel.js";
+import { blockProgressPanelSpec, emptyBlockProgress } from "../components/block-progress-panel.js";
 import { createChart } from "../charts/chart.js";
 import { buildEChartsTheme, readThemeTokens } from "../charts/theme-echarts.js";
 import {
@@ -91,6 +92,11 @@ export function transformWorkerDetailData(payload, workername) {
     // ever on payload.pool -- docs/ARCHITECTURE.md Section 25).
     difficultyHistogram: record.difficulty_histogram || emptyHistogramDatasetPair(),
     networkDifficulty: payload && payload.pool && payload.pool.network_difficulty,
+    // Phase E Milestone 30: Block Progress Analytics -- present per-scope
+    // (unlike network_difficulty above, no cross-reference into
+    // payload.pool is needed; this worker's own block_progress already
+    // includes the current pool-wide network_difficulty).
+    blockProgress: record.block_progress || emptyBlockProgress(),
   };
 }
 
@@ -176,11 +182,24 @@ function histogramSectionSpec(data, histogramDataset) {
   });
 }
 
+// Phase E Milestone 30: the one Block Progress panel shared, byte-
+// identical logic-wise, with overview.js/user-detail.js.
+function blockProgressSectionSpec(data) {
+  const bp = data.blockProgress;
+  return blockProgressPanelSpec({
+    networkDifficultyText: formatCompactSdiff(bp.network_difficulty),
+    bestShareText: formatCompactSdiff(bp.best_share_difficulty),
+    progressPercentText: formatProgressPercent(bp.progress_percent),
+    stillNeededText: formatStillNeededMultiplier(bp.still_needed_multiplier),
+  });
+}
+
 function loadingSectionSpec() {
   return el("div", {
     className: "worker-detail-page__loading",
     children: [
       loadingSkeletonSpec({ shape: "tile", count: 15, className: "tile-grid" }),
+      loadingSkeletonSpec({ shape: "tile", count: 4, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "block", height: 320 }),
     ],
   });
@@ -234,6 +253,7 @@ export function buildWorkerDetailSpec(state) {
       headerSpec(state.workername),
       ...banners,
       statTilesSectionSpec(state.data),
+      blockProgressSectionSpec(state.data),
       histogramSectionSpec(state.data, state.histogramDataset || DEFAULT_HISTOGRAM_DATASET),
     ],
   });
