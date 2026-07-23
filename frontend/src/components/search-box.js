@@ -15,6 +15,7 @@
 // input, so there is nothing yet to exercise either state against.
 
 import { el } from "../core/dom.js";
+import { iconChildren } from "./icons.js";
 
 export function searchBoxSpec({ value = "", placeholder = "Search", label = "Search", className } = {}) {
   const classes = ["search-box"];
@@ -33,6 +34,7 @@ export function searchBoxSpec({ value = "", placeholder = "Search", label = "Sea
       el("span", {
         className: "icon icon-search search-box__icon",
         attrs: { "aria-hidden": "true" },
+        children: [...iconChildren("search")],
       }),
       el("input", {
         className: "search-box__input",
@@ -50,6 +52,7 @@ export function searchBoxSpec({ value = "", placeholder = "Search", label = "Sea
           el("span", {
             className: "icon icon-close",
             attrs: { "aria-hidden": "true" },
+            children: [...iconChildren("close")],
           }),
         ],
       }),

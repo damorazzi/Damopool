@@ -60,6 +60,7 @@
 import { el } from "../core/dom.js";
 import { FEED_EVENT_TYPES } from "../shell/live-feed-events.js";
 import { truncateAddress, truncateWorkername, formatCompactSdiff, formatPercentage } from "../core/format.js";
+import { iconChildren } from "./icons.js";
 
 function truncatedDetail(event) {
   return event.type === "new_user" ? truncateAddress(event.detail) : truncateWorkername(event.detail);
@@ -101,7 +102,11 @@ function statsChildren(event) {
       el("div", {
         className: "live-feed__trend",
         children: [
-          el("span", { className: "icon icon-trend-up", attrs: { "aria-hidden": "true" } }),
+          el("span", {
+            className: "icon icon-trend-up",
+            attrs: { "aria-hidden": "true" },
+            children: [...iconChildren("trend-up")],
+          }),
           el("span", { className: "live-feed__trend-value", text: formatPercentage(event.improvementPercentage) }),
         ],
       }),
@@ -153,6 +158,7 @@ function eventItemSpec(event, { hidden = false } = {}) {
           el("span", {
             className: `icon icon-${meta ? meta.icon : "info"} live-feed__icon`,
             attrs: { "aria-hidden": "true" },
+            children: [...iconChildren(meta ? meta.icon : "info")],
           }),
           el("span", { className: "live-feed__label", text: label }),
           el("span", { className: "live-feed__detail", text: truncatedDetail(event) }),

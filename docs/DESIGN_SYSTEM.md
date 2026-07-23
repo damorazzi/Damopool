@@ -181,15 +181,15 @@ continuity:
 | 4 (e.g. previous/comparison) | `#ffa500` | Existing site's dashed-line colour |
 | 5 | `--color-success` (`#4caf50`) | Reused rather than adding a sixth new colour |
 
-**Open item, not resolved here:** series 3 (`#ff7f50`, coral) and series 4
-(`#ffa500`, orange) are close enough in hue that they may not be reliably
-distinguishable for red-green colour-blind users. This palette is
-inherited from the live site rather than invented, so it is flagged
-rather than silently kept — a colour-blindness simulation pass on the
-actual rendered charts is recommended before or during Phase D, with the
-fallback being to differentiate series 3/4 by line style (solid vs
-dashed, already used for the current/previous distinction on the live
-site) rather than by hue alone.
+**Resolved, Phase F.** The colour-blindness simulation recommended above
+was run (Machado, Oliveira & Fernandes 2009 dichromacy matrices, applied
+in linear RGB against the actual `#ff7f50`/`#ffa500` token values):
+series 3 and series 4 retain 97% of their original sRGB distance under
+simulated protanopia and 79% under simulated deuteranopia — distinguishable
+in both cases, not the risk the inherited palette's hue proximity
+suggested. No line-style fallback is needed for this pairing. The
+identical method found a real risk elsewhere (Section 13's success/danger
+finding), so this is a verified pass, not an assumed one.
 
 ## 5. Design Tokens: Typography
 
@@ -296,6 +296,28 @@ toggle), external-link, copy (for copying a username/address), close,
 info, warning, error, chevron (expand/collapse, pagination), hamburger
 (mobile nav toggle, Section 10.7).
 
+**Phase E Milestone 27 addition, reconciled here (Phase F):** the Global
+Live Feed's `FEED_EVENT_TYPES` registry (`shell/live-feed-events.js`)
+added four icon names not in the list above -- `trophy` (New Personal
+Best, New Best Ever), `chart` (Best Share Today), `user` (New User), and
+`worker` (New Worker) -- shipped in code at M27 but never added to this
+section, the same class of documentation-sync gap Process 2.0's Stage 12
+now exists to catch. Added here rather than left stale.
+
+**Implementation status, Phase F:** `frontend/src/components/icons.js`
+implements every icon above that has a real call site in shipped code --
+search, trend-up, trend-down, theme, external-link, close, info, warning,
+error, trophy, chart, user, worker (13 icons) -- as inline SVG,
+stroke-based, `currentColor`, per this section's own spec. `hamburger`
+already had a working hand-drawn CSS glyph (Milestone 27) and was left
+as-is. `sort-ascending`, `sort-descending`, `copy`, and `chevron` remain
+unimplemented: none has a call site anywhere in the codebase today (no
+sortable table, copy-to-clipboard control, or pagination/expand-collapse
+UI has been built), so building them now would be speculative --
+deferred until the feature that needs each one is actually built,
+matching this project's own established "add it when a page that
+actually needs it exists" convention.
+
 ## 9. Motion and Animation
 
 ```
@@ -333,12 +355,22 @@ per-page later.
 
 Variants: **primary** (solid `--color-accent` fill, dark text for
 contrast, for the single most important action on a view), **secondary**
-(transparent fill, `--color-accent` border, text in `--color-accent`
-(dark theme) / `--color-accent-text` (light theme) — the border can stay
-the brighter fill colour on both themes since a border is a non-text
-element (3:1 threshold), but the text inside the button follows the same
-theme-conditional rule as every other text use of accent colour, Section
-4.3), **ghost** (no border, text-only, same theme-conditional colour rule
+(transparent fill, `--color-accent-text` border in both themes, text in
+`--color-accent` (dark theme) / `--color-accent-text` (light theme) —
+**correction, Phase F:** this section previously claimed the border
+"can stay the brighter fill colour on both themes since a border is a
+non-text element (3:1 threshold)." Phase F actually computed that
+threshold rather than assuming it and found the bare `--color-accent`
+fill value fails 3:1 on light theme (1.32:1 against `--color-bg`,
+1.40:1 against `--color-surface` — see Section 13). `--color-accent-text`
+already clears the stricter 4.5:1 text threshold on light theme, so it
+clears 3:1 too, and is identical to the bare value on dark theme, so
+using it for the border in both themes fixes light theme with no dark-
+theme change. No `styles/components/button.css` exists yet to carry this
+forward into, so nothing shipped was broken by the original claim — this
+correction exists so whichever milestone eventually builds it starts from
+the verified value, not the disproven one), **ghost** (no border,
+text-only, same theme-conditional colour rule
 as secondary — this is also the variant used for a back-link/breadcrumb,
 e.g. the User Detail wireframe's "← Back to Users",
 `docs/ARCHITECTURE.md` Section 22), **danger** (`--color-danger` fill —
@@ -458,9 +490,12 @@ taller than one viewport. Contains: logo/wordmark, the nav link list
 height padding.
 
 Active link: text in `--color-accent` (dark theme) / `--color-accent-text`
-(light theme) plus a `2px` bottom border in `--color-accent` (a border is
-non-text, so it can stay the brighter fill colour on both themes,
-Section 4.3) — no background pill, keeping the header visually quiet
+(light theme) plus a `2px` bottom border in `--color-accent-text` in
+both themes — **corrected, Phase F** (implemented in `shell.css`): the
+bare `--color-accent` fill value fails 3:1 non-text contrast on light
+theme (Section 13); `--color-accent-text` clears it in both themes with
+no visible change on dark theme (see Section 10.1's identical correction)
+— no background pill, keeping the header visually quiet
 per Section 2's restraint principle. The nav link list collapses behind
 a hamburger control (Section 8's icon set) into a full-width dropdown
 panel using `--color-surface`, at every viewport width (Phase E
@@ -641,16 +676,60 @@ introduced in Section 4.3 — `--color-danger`'s dark-theme value on light
 backgrounds (3.60:1 / 3.82:1, both pass) and `--color-success`'s
 dark-theme value on light backgrounds (2.62:1 / 2.78:1, both fail,
 which is why light theme's `--color-success` uses the darkened value
-instead, per Section 4.3). Not covered by either check, and not yet
-verified (explicitly out of scope for this document, flagged rather than
-assumed): non-text contrast for `--color-accent` used as a border (button
-borders, the active-nav underline, focus rings, Section 10.1/10.7), and
-colour-blindness simulation of the chart palette (Section 4.4's open
-item) and of the success/danger colour pairing used together (e.g. a
-table showing both accepted and rejected counts side-by-side) —
-recommended as Phase D verification steps before go-live, consistent
-with how `docs/ARCHITECTURE.md` handles its own open infrastructure
-items.
+instead, per Section 4.3).
+
+**Resolved, Phase F.** Three items below were previously recommended as
+verification steps but not yet checked; all three have now actually been
+computed rather than assumed:
+
+- **Non-text contrast for `--color-accent` used as a border** (button
+  borders, the active-nav underline, focus rings, Section 10.1/10.7):
+  **failed** on light theme (1.32:1 against `--color-bg`, 1.40:1 against
+  `--color-surface` — both well under the 3:1 threshold; dark theme
+  passes at 13.54:1/12.34:1). Fixed by using `--color-accent-text`
+  instead of the bare fill value for every border/outline use, in both
+  themes (identical to the bare value on dark theme, so no visible
+  change there; already clears the stricter 4.5:1 text threshold on
+  light theme, so it clears 3:1 too). Implemented in `base.css`'s
+  `:focus-visible` rule, `search-box.css`'s focus border, and
+  `shell.css`'s active-nav underline — the only three places
+  `--color-accent` was used as a border/outline in shipped CSS.
+
+  **Known, deliberately not fixed here (Code Reviewer finding, Phase F):**
+  `charts/theme-echarts.js` still reads the bare `--color-accent` token
+  for chart line/marker colours (e.g. the histogram chart's dashed
+  "current" line and item markers), which carries the identical
+  light-theme contrast failure this fix addresses for border/outline use.
+  WCAG 1.4.11 can extend to graphical objects required to understand
+  content, not just borders, so this is a real, plausible gap — but it
+  is a chart-rendering concern in an already-shipped file
+  (`theme-echarts.js`), genuinely outside this milestone's investigated
+  and approved scope (border/outline contrast specifically), not a cheap
+  same-file fix. Tracked as its own future closeout item rather than
+  fixed under scope creep or silently left undocumented.
+- **Colour-blindness simulation of the chart palette** (Section 4.4's
+  open item): **passed** — series 3/coral and series 4/orange retain
+  79-97% of their original distinguishability under simulated
+  protanopia/deuteranopia. No fix needed.
+- **Colour-blindness simulation of the success/danger pairing used
+  together:** **failed** — both theme's fill values collapse to as
+  little as 10% of their original distinguishability under simulated
+  deuteranopia. Checked against every current call site (`badge.js`):
+  every existing use already pairs the colour with a required text label
+  ("Accepted"/"Rejected", "Active"/"Inactive"), so colour is reinforcing,
+  never the sole signal, in shipped code today — no fix was needed for
+  anything currently built. **Permanent rule, going forward:**
+  `--color-success`/`--color-danger` must never be the sole
+  differentiator for a status or result — always paired with a text
+  label, icon, or shape, checked by `DEVELOPMENT_PROCESS.md` v2.0's
+  Documentation Sync stage for any future component that shows the two
+  together.
+
+All three were computed with the same method as the tables above (the
+WCAG 2.1 relative-luminance formula for contrast; the Machado, Oliveira &
+Fernandes 2009 dichromacy matrices, applied in linear RGB, for the
+colour-blindness simulations) against the actual token hex values, not
+estimated.
 
 ## 14. Consistency Governance
 

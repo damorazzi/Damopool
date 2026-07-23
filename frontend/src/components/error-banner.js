@@ -7,6 +7,7 @@
 // hiding or replacing anything else on the page.
 
 import { el } from "../core/dom.js";
+import { iconChildren } from "./icons.js";
 
 const DEFAULT_MESSAGE = "Something went wrong.";
 
@@ -23,6 +24,7 @@ export function errorBannerSpec({ message, icon = "error", className } = {}) {
       el("span", {
         className: `icon icon-${iconName} error-banner__icon`,
         attrs: { "aria-hidden": "true" },
+        children: [...iconChildren(iconName)],
       }),
       el("p", {
         className: "error-banner__message",

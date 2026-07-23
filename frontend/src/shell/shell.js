@@ -33,6 +33,7 @@ import { parseHash } from "../core/router.js";
 import { formatRelativeTime } from "../core/format.js";
 import { getState, setState, subscribe } from "../core/state.js";
 import { liveFeedSpec } from "../components/live-feed.js";
+import { iconChildren } from "../components/icons.js";
 import { FEED_EVENT_TYPES, deriveFeedEvents, accumulateFeedEvents } from "./live-feed-events.js";
 
 // Exported so the FOUC-prevention inline script in
@@ -222,6 +223,7 @@ export function buildHeaderSpec({ navItems, location, theme }) {
                   el("span", {
                     className: "icon icon-theme",
                     attrs: { "aria-hidden": "true" },
+                    children: [...iconChildren("theme")],
                   }),
                 ],
               }),
@@ -243,7 +245,11 @@ function footerLinkSpec(link) {
   const children = [el("span", { text: link.label })];
   if (link.external) {
     children.push(
-      el("span", { className: "icon icon-external-link", attrs: { "aria-hidden": "true" } }),
+      el("span", {
+        className: "icon icon-external-link",
+        attrs: { "aria-hidden": "true" },
+        children: [...iconChildren("external-link")],
+      }),
     );
   }
 

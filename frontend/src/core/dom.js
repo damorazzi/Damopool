@@ -17,15 +17,36 @@ export function el(tag, { className, attrs = {}, text, children = [] } = {}) {
   return { tag, className, attrs, text, children };
 }
 
+// Phase F icon-set milestone: a fixed, small whitelist of SVG element
+// names. These must be created via document.createElementNS with the
+// SVG namespace -- document.createElement (used for every other tag)
+// produces an inert, non-rendering element for any of these, since SVG
+// is a distinct XML namespace, not a variant of HTML. The whitelist is
+// deliberately closed (only the shapes icons.js actually uses) rather
+// than a generic "does this look like an SVG tag" heuristic.
+const SVG_TAGS = new Set(["svg", "path", "circle", "line", "polyline", "rect", "g"]);
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 export function specToDom(spec) {
   if (typeof spec === "string") {
     return document.createTextNode(spec);
   }
 
-  const node = document.createElement(spec.tag);
+  const isSvg = SVG_TAGS.has(spec.tag);
+  const node = isSvg
+    ? document.createElementNS(SVG_NS, spec.tag)
+    : document.createElement(spec.tag);
 
   if (spec.className) {
-    node.className = spec.className;
+    // SVGElement.className is an SVGAnimatedString, not a plain string --
+    // assigning to it directly does not reliably set the class the way
+    // it does on an HTMLElement. setAttribute("class", ...) is the
+    // namespace-agnostic way to set it correctly on both kinds of node.
+    if (isSvg) {
+      node.setAttribute("class", spec.className);
+    } else {
+      node.className = spec.className;
+    }
   }
 
   for (const [key, value] of Object.entries(spec.attrs || {})) {

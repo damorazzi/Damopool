@@ -7,6 +7,7 @@
 // doesn't collapse to a different layout.
 
 import { el } from "../core/dom.js";
+import { iconChildren } from "./icons.js";
 
 // A fallback for the case a caller forgets to pass one -- this is a
 // safety net, not an example of an approved message; every real call
@@ -23,6 +24,7 @@ export function emptyStateSpec({ message, className } = {}) {
       el("span", {
         className: "icon icon-info empty-state__icon",
         attrs: { "aria-hidden": "true" },
+        children: [...iconChildren("info")],
       }),
       el("p", {
         className: "empty-state__message",

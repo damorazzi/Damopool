@@ -64,23 +64,15 @@ table {
   border-collapse: collapse;
 }
 
-/* docs/DESIGN_SYSTEM.md Section 8: icon sizing. Section 8 specifies
-   inline SVG icons; none exist yet (a disclosed gap since Milestone
-   5) -- every icon element in this project today is an empty
-   `<span class="icon icon-X" aria-hidden="true">` with no child
-   nodes at all (el()'s own textContent/appendChild-only construction
-   confirms no stray whitespace either, so :empty matches reliably).
-   Reserving icon-sized space unconditionally would leave a visible
-   blank hole wherever an icon is expected but not drawn, so :empty
-   collapses a placeholder with no rendered content to zero size. A
-   future icon implementation that adds a real child (Section 8's own
-   named "inline SVG icons" approach) stops matching :empty
-   automatically and inherits this sizing with no other component CSS
-   needing to change. (A hypothetical background-image/mask-image-only
-   icon with no DOM child would still match :empty and would need its
-   own override -- not the approach Section 8 names, so treated as an
-   unlikely future case rather than an unexamined gap.) Each
-   component's own icon class may override width/height where the
+/* docs/DESIGN_SYSTEM.md Section 8: icon sizing. Phase F closed the icon
+   gap disclosed since Milestone 5 -- components/icons.js now supplies a
+   real inline-SVG child (fill: none, stroke: currentColor) for every
+   icon name with a real call site, per Section 8's "inline SVG icons"
+   approach. `.icon:empty` is kept: `icon-hamburger` still renders via
+   its own hand-drawn ::before glyph (shell.css) rather than an SVG
+   child, and any icon name icons.js does not (yet) cover still falls
+   back to this same empty/hidden behaviour rather than a blank box.
+   Each component's own icon class may override width/height where the
    design system calls for a non-default size (e.g. empty-state's
    --icon-size-lg); this rule only supplies the default. */
 .icon {
@@ -94,6 +86,11 @@ table {
 
 .icon:empty {
   display: none;
+}
+
+.icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* Numeric values that should align in columns -- docs/DESIGN_SYSTEM.md
@@ -111,9 +108,17 @@ table {
 
 /* Visible focus ring, applied consistently rather than per-component
    -- docs/ARCHITECTURE.md Section 17, docs/DESIGN_SYSTEM.md Section
-   10.1: never remove focus-visible styling, only restyle it. */
+   10.1: never remove focus-visible styling, only restyle it.
+   --color-accent-text, not the bare --color-accent fill value: Phase F
+   verified (docs/DESIGN_SYSTEM.md Section 13) that the bare fill value
+   fails the 3:1 non-text contrast threshold on light theme (1.32:1
+   against --color-bg, 1.40:1 against --color-surface) -- a focus ring
+   that's effectively invisible on light theme. --color-accent-text
+   already clears the stricter 4.5:1 text threshold on light theme, so
+   it clears 3:1 too, and it's identical to the bare value on dark
+   theme (theme-dark.css), so this produces no visual change there. */
 :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-accent-text);
   outline-offset: 2px;
 }
 

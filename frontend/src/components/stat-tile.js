@@ -15,6 +15,7 @@
 
 import { el } from "../core/dom.js";
 import { cardSpec } from "./card.js";
+import { iconChildren } from "./icons.js";
 
 export function statTileSpec({
   label,
@@ -50,6 +51,7 @@ export function statTileSpec({
           el("span", {
             className: `icon icon-trend-${trend.direction}`,
             attrs: { "aria-hidden": "true" },
+            children: [...iconChildren(`trend-${trend.direction}`)],
           }),
           el("span", {
             className: "stat-tile__trend-value",

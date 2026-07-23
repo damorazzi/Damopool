@@ -165,7 +165,11 @@
 
 .shell-header__nav-link--active {
   color: var(--color-accent-text);
-  border-bottom-color: var(--color-accent);
+  /* --color-accent-text, not the bare fill value: Phase F verified
+     (docs/DESIGN_SYSTEM.md Section 13) the bare value fails 3:1
+     non-text contrast on light theme; see base.css's :focus-visible
+     comment for the full reasoning, which applies identically here. */
+  border-bottom-color: var(--color-accent-text);
 }
 
 .shell-footer {

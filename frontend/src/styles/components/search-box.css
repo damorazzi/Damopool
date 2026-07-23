@@ -17,8 +17,12 @@
   transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
+/* --color-accent-text, not the bare fill value: Phase F verified
+   (docs/DESIGN_SYSTEM.md Section 13) the bare value fails 3:1 non-text
+   contrast on light theme; see base.css's :focus-visible comment for
+   the full reasoning, which applies identically here. */
 .search-box:focus-within {
-  border-color: var(--color-accent);
+  border-color: var(--color-accent-text);
 }
 
 .search-box__input {
