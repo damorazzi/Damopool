@@ -1,11 +1,16 @@
 # Damopool Engineering Organisation — Version 2.0 (Design Proposal)
 
-> **Status: DRAFT.** This document is a proposal, not the active governing
-> process. `ENGINEERING_ORGANISATION.md` (root) and `DEVELOPMENT_PROCESS.md`
-> remain in force, unchanged, until this document is reviewed and explicitly
-> approved by the Human, per the existing governance rule that changes to
-> either document require Human approval. Nothing in this proposal has been
-> applied. No existing Feature 007 work is affected by it.
+> **Status: RESOLVED, 2026-07-23.** This draft sat unreviewed through the entirety of Phase E — itself
+> a governance gap, named in `docs/PHASE_E_POSTMORTEM.md` Section 9. It has now been resolved
+> item-by-item against Phase E's own evidence rather than left open any longer; the full disposition
+> table is in `docs/PHASE_E_POSTMORTEM.md` Section 13. Summary: Targeted Re-Review (Part 8), per-stream
+> log staging (Part 9), Test Engineer pre-screening, and Mandatory Context Justification (Part 3) are
+> **adopted** and are now written into `DEVELOPMENT_PROCESS.md` v2.0. Architecture/Design System Digests
+> (Parts 2.1–2.2) are **approved for a pilot only**, not general reliance. Technical Secretary, the
+> Engineering Dashboard, and Versioned Engineering Memory are **deferred** — no track record yet exists
+> to justify them. A third+ concurrent parallel stream and a literal multi-stage review pipeline are
+> **rejected** for now. This file's substantive content below is preserved unchanged as the historical
+> record this analysis was actually based on; it is no longer an open proposal awaiting a decision.
 
 ## 0. Purpose and Relationship to Existing Governance
 

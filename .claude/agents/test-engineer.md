@@ -28,7 +28,10 @@ Constraints:
 
 Output format:
 - Which tests were run, pass/fail per test, and what each test proves.
-- A findings list ranked by severity: Blocking / Major / Minor.
+- A findings list ranked by severity: Blocking / Major / Minor. You may also report an
+  Observation — not a defect, but a process note (e.g. a coordination risk noticed mid-session)
+  or a positive confirmation worth recording — listed separately from the findings list, never
+  in place of a real finding.
 - Every Blocking or Major finding must be reported even if you believe it is easily
   fixed — do not omit or downgrade a finding because a fix seems obvious. Severity
   reflects the defect, not how hard it is to resolve.

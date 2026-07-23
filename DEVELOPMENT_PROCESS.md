@@ -1,310 +1,302 @@
-# Damopool Development Process v1.2
+# Damopool Development Process v2.0 ("Engineering Process 2.0")
 
 ## 1. Purpose
 
-This document defines the official Damopool Development Process. It is
-based on the engineering workflow successfully validated during the
-implementation of Features 002 (Pool Statistics), 003 (User Statistics),
-004 (Worker Statistics), 005 (analytics.json), and 006 (Website
-Integration). Future feature development should follow this process
-unless it is formally revised. It exists to provide a consistent,
-repeatable engineering process and to ensure anyone reviewing the project
-understands how software is designed, implemented, tested, reviewed,
-approved, and released.
+This document defines the official Damopool Development Process. It is the canonical, operational
+engineering standard for every future Damopool milestone, effective 2026-07-23.
 
-Version 1.1 records one change: the single "Lead Engineer" model used
-through Feature 006 was replaced with a permanent, named engineering
-organisation (see PROJECT_LOG.md for why). The workflow, quality gates,
-and governance below are unchanged in substance by that transition — only
-who performs the work, and how that is named and documented, changed.
-Team role definitions have moved to ENGINEERING_ORGANISATION.md, so this
-document no longer duplicates them.
+Version 2.0 replaces v1.2 in full. It was produced as a formal post-phase engineering review of Phase E
+(Milestones 16-31) and the Milestone 5-7 governance correction that preceded it, carried out at Human
+request after Phase E's completion and before Phase F begins. Every stage, gate, checklist, and principle
+below is grounded in that review's evidence, not written from a template. The full historical review,
+the reasoning behind every merge/insertion/addition made to reach this version, and the disposition of
+the previously-drafted `docs/ENGINEERING_ORGANISATION_V2.md` proposal are recorded in
+`docs/PHASE_E_POSTMORTEM.md` and are not repeated here -- this document states the standard only, to
+keep it short enough to reread in full before every major phase.
 
-Version 1.2 records one change: a Scope Assessment and Waiver requirement
-was added to the Standard Feature Workflow (Section 6) and Quality Gates
-(Section 7). An Engineering Manager governance audit (PROJECT_LOG.md,
-2026-07-18) found that across Feature 007's Milestones 5-7, the Test
-Engineer step of Section 6 had gone silently undispatched, and the Code
-Reviewer had been informally used outside its written, Python-only
-charter — in both cases without the Human approval Section 5 already
-required for exactly this kind of change, and without either Human
-Approval Brief disclosing it. This version closes that gap: a workflow
-step or an agent's scope may still turn out not to apply to a given
-feature, but that determination is now always recorded and always
-Human-approved before the process proceeds without it, never silently
-decided by the Engineering Manager alone. The workflow and quality gates
-are otherwise unchanged in substance.
+Prior version history: v1.0 established the original Lead Engineer workflow (Features 002-006). v1.1
+replaced the single Lead Engineer model with the named engineering organisation now defined in
+`ENGINEERING_ORGANISATION.md`. v1.2 added the Scope Assessment and Waiver requirement after an
+Engineering Manager governance audit found Test Engineer had gone silently undispatched across Feature
+007's Milestones 5-7. v2.0 supersedes v1.2 after Phase E's evidence showed that rule alone did not
+reliably prevent its own recurrence (Milestone 30) -- see `docs/PHASE_E_POSTMORTEM.md` Sections 0, 9, and
+12 for the full account.
 
-## 2. Team Roles
+## 2. Workflow Stages
 
-Team roles — the Engineering Manager and the specialist roles that
-support it — are fully defined in ENGINEERING_ORGANISATION.md, the
-authoritative Damopool engineering organisation handbook. That document
-covers purpose, responsibilities, authority, inputs, outputs, file
-boundaries, and communication paths for every role. It does not redefine
-workflow, quality gates, or governance; those remain exactly as recorded
-in this document.
+18 stages. Stages 09 and 17 are conditional; all others apply to every milestone without exception. Any
+stage may emit a Stop per Section 7; work then returns to the stage Section 7 names for that condition,
+not to the stage where the Stop occurred.
 
-**Human (Project Owner)** — holds final authority over the project.
-Approves feature scope where it is not already an established analogue of
-prior approved work, approves the Human Approval Brief, and authorizes
-every commit, every push, and every ROADMAP.md completion mark.
+| # | Stage | Purpose | Role | Human Approval? | Impl. Permitted? | Exit Criteria | Required Docs |
+|---|---|---|---|---|---|---|---|
+| 01 | Feature / Milestone Proposal | State scope against `ROADMAP.md` / `CLAUDE.md` and any recorded precedent | Engineering Manager or Human | Only if scope has no precedent | No | Scope unambiguous enough to investigate | Folded into Stage 3 |
+| 02 | Investigation | Verify any empirical claim the design depends on, against real data, before proposing a mechanism | Architecture Lead / Data Pipeline Engineer | No | No | Mandatory when the design depends on an empirical claim about real data; skip for a mechanical, precedented change | Folded into Stage 3 |
+| 03 | Design Proposal (architecture + technical design, one document) | Propose mechanism, schema impact, module boundaries before any code | Architecture Lead | Yes -- for any new public contract, new module boundary, or no-precedent decision | No | Recorded "Design Completed" in PROJECT_LOG.md | PROJECT_LOG.md entry; ARCHITECTURE.md schema note if additive |
+| 04 | Human Approval -- Design | The Human decides on anything with no precedent, before code exists | Human | This is the gate | No, until approved | Explicit approval recorded | Decision appended to Stage 3 entry |
+| 05 | Implementation | Build exactly the approved design | Backend / Frontend / Data Pipeline Lead | No, within approved scope | Yes | Code matches design; shipped files untouched except verified regression (checked via `git diff`) | None yet |
+| 06 | Pre-Completion Self-Audit | Force the review-omission question before a milestone can be called complete | Engineering Manager | No -- but its result is a mandatory field in Stage 13 | N/A | Every checklist line (Section 8, Milestone Closure) answered before Stage 7 | Result recorded in PROJECT_LOG.md |
+| 07 | Backend Testing | Independent adversarial testing of Python/backend code, per the Independent Review standard (Section 4) | Test Engineer (agent) | No | Test files only | Dispatched for every backend Python change -- no waiver applies to backend Python | Findings summarized in PROJECT_LOG.md, classified per Section 5 |
+| 08 | Frontend Testing & Browser Verification | Prove the change works in a real browser | Frontend Lead | No | Test files only | Zero console/page errors; desktop + 375px viewport both pass | Verification summary in PROJECT_LOG.md |
+| 09 | Integration / Multi-Scope Testing | Confirm cross-boundary correctness (schema reach, scope isolation) | Test Engineer / EM | No | Test files only | Conditional -- required only when a shared contract changes; otherwise folded into Stage 7/8 | Folded into Stage 7/8 entry |
+| 10 | Independent Code Review (+ Targeted Re-Review) | Independent, read-only review of correctness, architecture, validation, CLAUDE.md compliance, per Section 4 | Code Reviewer (agent) | No | None -- read-only | Round 1: full review. Round 2+: dispatch carries the specific findings list plus a diff, not a re-review instruction; widens only for a documented shared interface, a security boundary, or context the diff can't answer alone | Findings + round number in PROJECT_LOG.md, classified per Section 5 |
+| 11 | Fix + Re-Verify | Resolve every Blocking/Major finding (Section 5) and independently confirm each fix | Owning Lead | Only if a fix requires touching an already-shipped file for a non-regression reason | Yes | Every Blocking/Major resolved and re-verified; Minor findings fixed if cheap, else carried forward | Fix-by-fix record in PROJECT_LOG.md |
+| 12 | Documentation Sync | Check ARCHITECTURE.md / DESIGN_SYSTEM.md and every cross-reference to the changed area | Documentation Engineer | No | Documentation files only | Zero known stale cross-references at commit time | Itself |
+| 13 | Human Approval Brief | Present the finished, reviewed, documented milestone for sign-off | Engineering Manager | N/A -- produces the request | No | Brief delivered per Section 2a | The Brief |
+| 14 | Human Final Approval | The one non-delegable decision that unlocks commit | Human | Yes -- this is the gate | No | Explicit approval | Recorded in PROJECT_LOG.md |
+| 15 | Commit | Stage exactly the approved file set | Release Manager | Yes, separate and explicit | No content changes | Commit created | Commit hash in PROJECT_LOG.md |
+| 16 | Push | Publish to the remote | Release Manager | Yes, separate from Commit | No | Push completed, verified against origin | Confirmed in PROJECT_LOG.md |
+| 17 | Infrastructure Change Protocol | One named procedure for any change to a live, unversioned, root-owned system | Human executes; EM proposes/verifies | Yes -- every privileged command, one at a time | Human only, from an EM-prepared diff | Endpoint/behavior proof the running system reflects the change | Backup path, checksums, rollback command in PROJECT_LOG.md |
+| 18 | Production Verification & Milestone Closure | Confirm live behavior; close the record | EM proposes; Human marks ROADMAP.md | Yes, for the ROADMAP.md status change | No | Live behavior confirmed; log and roadmap updated in the same action | Itself |
 
-## 3. Authority Levels
+### 2a. Human Approval Brief -- Required Fields
 
-This section states the same authority boundaries that applied under the
-Lead Engineer model, unchanged in substance, with roles renamed to match
-ENGINEERING_ORGANISATION.md. See that document for the full per-role
-breakdown (including roles beyond the two listed here) of inputs,
-outputs, and file boundaries.
+Every Stage 13 Brief includes: Feature/Milestone Summary; Files Changed; Tests Created; Tests Executed;
+Test Results; Scope Assessments and Waivers (any control that did not apply per its written charter --
+never left implicit by omission; where a Waiver applies, its recommendation line reads "N/A -- waived"
+and points to the recorded Scope Assessment); the Stage 6 Pre-Completion Self-Audit result; findings by
+severity (Section 5) from each review round; Test Engineer Recommendation; Code Reviewer Recommendation;
+Remaining Known Limitations; Documentation Updated; Git Status. The Brief itself, and each subagent
+report within it, closes with exactly one of: **APPROVE**, **APPROVE WITH KNOWN LIMITATIONS**, or
+**DO NOT APPROVE**.
 
-**Human authority (non-delegable):**
-- Approving a Human Approval Brief
-- Authorizing commits
-- Authorizing pushes
-- Marking a feature Completed in ROADMAP.md
-- Resolving scope or timing decisions with no precedent in prior approved
-  work
+## 3. Roles & Responsibilities
 
-**Engineering Manager authority (exercised without per-step human
-approval, once a feature's scope is established — this is the same
-authority the Lead Engineer held; only the name changed):**
-- Designing a feature that closely mirrors the structure of an
-  already-approved prior feature
-- Implementing production code
-- Creating and running tests
-- Invoking the Test Engineer
-- Fixing Blocking and Major findings
-- Re-running tests
-- Invoking the Code Reviewer
-- Resolving Code Reviewer findings
-- Updating PROJECT_LOG.md and other project documentation
+Team roles are fully defined in `ENGINEERING_ORGANISATION.md`, the authoritative Damopool engineering
+organisation handbook. This document does not redefine roles, authority, or file boundaries -- it states
+only how each role participates in the stages above.
 
-**Subagent authority (Test Engineer, Code Reviewer):**
-- Read-only access to the codebase, plus (Test Engineer only) the ability
-  to write test files and run them
-- No ability to modify production code
-- No ability to invoke other agents
-- No ability to commit, push, or modify project governance documents
+| Role | Participates In | Notes |
+|---|---|---|
+| **Human (Damien)** | Stages 4, 14, 15, 16, 17, 18; every item in Section 6 (Approval Gates) and Section 7 (Stop Conditions) marked Human-required | Final authority; see Permanent Human Governance below |
+| **Engineering Manager** | Coordinates all stages; directly performs any role not delegated elsewhere | Owns Stage 6 and Stage 12 as non-skippable duties |
+| **Code Reviewer** (agent) | Stage 10 | Read-only. Scope: Python, plus Damopool frontend HTML/CSS/JS under the standing Phase E waiver (`ENGINEERING_ORGANISATION.md` Section 12) |
+| **Test Engineer** (agent) | Stages 7, 9 | Backend Python/sharelog only; no scope change from prior versions |
+| **Architecture Lead** | Stages 2, 3 | Delegatable, performed by EM |
+| **Backend Lead / Frontend Lead / Data Pipeline Engineer** | Stage 5, and Stage 8 for Frontend Lead | Delegatable, performed by EM |
+| **Documentation Engineer** | Stage 12 | Delegatable, performed by EM |
+| **Release Manager** | Stages 15-17's mechanical execution | Delegatable, performed by EM; zero independent authority over what is committed, pushed, or deployed |
+| **Technical Secretary** | Not created | Considered and deferred -- see `docs/PHASE_E_POSTMORTEM.md` Section 13 |
 
-## 4. Approval Memory
+**Permanent Human Governance** is unchanged from `ENGINEERING_ORGANISATION.md` Section 16: committing,
+pushing, marking a feature Completed in `ROADMAP.md`, modifying `CLAUDE.md`/this document/
+`ENGINEERING_ORGANISATION.md`/any agent definition, deleting project files, changing previously-shipped
+feature code except for a verified regression, any no-precedent public interface or architectural
+change, and any no-precedent scope/sequencing decision all remain under explicit Human control at all
+times, regardless of how much of a milestone proceeds without per-step approval.
 
-Design decisions, once made, are recorded in PROJECT_LOG.md under a
-feature's entry and marked "status: Design Completed." A decision recorded
-this way is treated as settled and is not re-argued during implementation
-or review — subsequent independent reviews are told the decision is
-approved and are asked only to verify the code correctly implements it,
-not to relitigate whether it is correct.
+**Approval Memory**, also unchanged in substance: a design decision recorded as "Design Completed" in
+`PROJECT_LOG.md` is settled and is not re-argued during implementation or later review -- subsequent
+reviews are asked only to verify the code correctly implements it. Lessons from one milestone's findings
+are applied proactively in later milestones without waiting to be told again (the standalone-module
+pattern established at M28 and reused without prompting at M29-M31 is the model).
 
-Findings that are not fixed immediately (typically Minor findings judged
-to be architectural debt, forward-looking notes, or genuine judgment
-calls) are explicitly recorded in PROJECT_LOG.md as "carried forward, not
-blocking" rather than silently dropped or silently fixed without a record.
+## 4. Independent Review Definition
 
-Lessons from one feature's findings are applied proactively in later
-features without waiting to be told again. For example, after Feature 003
-found that username validation needed to strip whitespace for the check
-without altering stored values, Feature 004 applied the identical pattern
-to workername validation from the start, and this was recorded as a
-deliberate application of a prior lesson in PROJECT_LOG.md.
+**Formal definition:** Independent review means verifying or re-deriving a claim from the underlying
+evidence directly -- not reading the implementation's own explanation of why it is correct and
+confirming that the explanation is internally consistent. A review that only checks "does the code do
+what its comment says" has not independently reviewed anything; it has proofread a claim.
 
-ROADMAP.md's per-feature Status field is the durable, human-controlled
-record of what has actually shipped.
+**The standard, by claim type:**
 
-## 5. Permanent Human Governance
+| Claim type | What independent review requires |
+|---|---|
+| A claim about data (e.g. "this value never repeats," "this file is untouched," "this test isolates state X") | Re-derive the claim against the actual underlying evidence -- real records, a real `git diff`, a real file's checksum or mtime -- rather than trusting the implementation's own comment or docstring asserting it |
+| A claim that a fix resolves a finding | Trace the specific code path the finding named and confirm the mechanism directly; where feasible, reproduce the originally-reported failure against the pre-fix code so the fix is shown to address the actual mechanism, not just the symptom |
+| A design recommendation | Form and disclose an independent position rather than defaulting to whatever the implementation already chose |
 
-Regardless of how much of a feature's design, implementation, and review
-cycle proceeds without per-step approval, the following remain under
-explicit human control at all times and have not been delegated in any
-feature to date:
+This applies to every dispatch of Code Reviewer (Stage 10) and Test Engineer (Stage 7), and to the EM's
+own Stage 6 self-audit.
 
-- Committing changes to git
-- Pushing to the remote repository
-- Marking a feature Completed in ROADMAP.md
-- Modifying CLAUDE.md
-- Modifying this document (DEVELOPMENT_PROCESS.md)
-- Modifying ENGINEERING_ORGANISATION.md
-- Modifying any agent definition, including creating a new one for a
-  currently-delegatable or future-placeholder role described in
-  ENGINEERING_ORGANISATION.md
-- Deleting project files
-- Changing the code of a previously shipped feature, except to fix a
-  verified regression introduced by the current feature
-- Any public interface change with no precedent in prior approved work
-- Any major architectural change with no precedent in prior approved work
-- Resolving scope or sequencing questions that have no precedent in
-  already-approved work (in practice, raised via a clarifying question to
-  the human rather than assumed)
+## 5. Severity Classification
 
-This boundary was also stated as an explicit constraint for Feature 004
-("Controlled Autonomy Trial") and was upheld: design, implementation,
-testing, fixing, and review all proceeded without per-step approval, while
-commit, push, and the ROADMAP.md status change were held for a separate,
-explicit human approval.
+The canonical severity vocabulary for Code Reviewer, Test Engineer, and the Stage 6 self-audit.
 
-## 6. Standard Feature Workflow
+| Level | Definition | Mandatory Action | Approval Impact | Implementation May Continue? | Human Approval Required? |
+|---|---|---|---|---|---|
+| **Blocking** | A defect that would cause incorrect data, a crash, a security exposure, a violation of a `CLAUDE.md` safety rule, or a violation of an already-approved design decision, if left in place | Fixed and independently re-verified before the milestone advances past Stage 11 | No Human Approval Brief may be produced while a Blocking finding is open | No, on the affected file, until fixed and re-verified | No approval needed to perform the fix itself; the milestone simply cannot advance without it |
+| **Major** | A real, reproducible defect that doesn't meet the Blocking bar but is a genuine, user-visible or compounding gap in correctness, accessibility, architecture fidelity, or documentation accuracy | Resolved before the Human Approval Brief, or explicitly carried forward with a stated reason | Every Major finding appears, resolved-or-carried-forward, in the Brief | Yes, on unrelated work; the specific file should not reach commit unresolved | Yes -- a Major finding may only be left open by an explicit Human decision to carry it forward |
+| **Minor** | A real but low-impact defect, code-quality note, or already-disclosed limitation that doesn't affect the milestone's core correctness claim | Fixed immediately if cheap and unambiguous; otherwise recorded as a known limitation | Listed in the Brief's Known Limitations; does not block approval | Yes, unconditionally | No |
+| **Observation** | Not a defect -- a process note, a named design tension, a tracked risk, or a positive confirmation ("verified correct, no action needed") | None required; recorded for context | Does not appear as a "finding" line; may be quoted in the Brief's narrative | Yes, always | No -- an Observation that surfaces a genuine architectural fork escalates via Stage 4 (Design) or the Disagreement Arbitration gate (Section 6) instead |
 
-1. Identify the approved scope from ROADMAP.md and CLAUDE.md, and from any
-   design decisions already recorded in PROJECT_LOG.md.
-2. If no design has been recorded yet, design the feature — mirroring the
-   closest already-shipped analogue where one exists — and record the
-   approved design in PROJECT_LOG.md before implementation begins. Where
-   scope is genuinely ambiguous and has no precedent, ask the human before
-   proceeding.
-3. Implement production code, reusing already-tested validation and math
-   primitives from prior features rather than duplicating their logic.
-4. Manually sanity-check the implementation (synthetic data, and a
-   read-only run against real production data) before involving the Test
-   Engineer.
-5. Before invoking the Test Engineer or the Code Reviewer, record a Scope
-   Assessment: does the work under review fall within that agent's
-   written charter (its `.claude/agents/*.md` definition and the
-   corresponding ENGINEERING_ORGANISATION.md section)? If yes, proceed to
-   invoke it (steps 6 and 9 below). If no, do not silently omit the step
-   and do not substitute another agent outside its own written charter.
-   Instead, present the human an explicit Waiver Request: which control
-   cannot apply, why, what (if anything) is proposed as a substitute for
-   this instance only, and what independent check will not occur as a
-   result. Proceed past this step only after the human explicitly
-   approves that specific waiver — a prior, unrelated approval (for
-   example, a commit or push authorization) does not constitute one.
-   Every waiver granted is recorded in PROJECT_LOG.md against the
-   milestone or feature it applies to, and reflected in the Human
-   Approval Brief per Section 9.
-6. Invoke the Test Engineer with full context: the files under test, the
-   files they depend on, the approved design decisions, and specific focus
-   areas.
-7. Report the Test Engineer's findings, classified by severity.
-8. Resolve every Blocking and Major finding, verifying each fix directly
-   rather than assuming the fix is correct.
-9. Re-run the full test suite (and, where the first Test Engineer pass
-   found Blocking issues, send the fixes back to the same Test Engineer
-   for independent re-verification) to confirm the fixes and rule out
-   regressions.
-10. Invoke the Code Reviewer only once every Blocking and Major finding
-    from step 8 has actually been fixed and re-verified — invoking it
-    against code that still has known unfixed issues produces a stale
-    review that has to be repeated.
-11. Resolve every Blocking and Major finding from the Code Reviewer. Minor
-    findings that are cheap, unambiguous, and necessary for the feature to
-    be committable (for example, a missing .gitignore allowlist entry) are
-    fixed immediately; other Minor findings are recorded as known
-    limitations.
-12. Where fixes were made after a review pass, re-test and, if warranted,
-    request a fresh review pass rather than relying on a review of
-    since-changed code.
-13. Update PROJECT_LOG.md with the full narrative: design decisions,
-    implementation summary, findings from each round of testing and
-    review, fixes applied, and any findings carried forward.
-14. Produce a Human Approval Brief (see section 9) and stop.
-15. On explicit human approval, commit. Push only on a separate or
-    combined explicit instruction. Mark the feature Completed in
-    ROADMAP.md as part of the same approved action.
+Severity reflects the defect, not how hard it is to resolve. A finding is never downgraded because the
+fix looks obvious.
 
-## 7. Quality Gates
+## 6. Approval Gates
 
-Before a Human Approval Brief is presented, every one of the following
-must be true:
+| Gate | Triggers On | Evidence Required |
+|---|---|---|
+| Design approval (Stage 4) | Any new public data contract, new module boundary, or no-precedent decision | A Stage 3 proposal naming the mechanism, schema impact, and every open question |
+| Waiver approval | Omitting or using Test Engineer / Code Reviewer outside its written charter | A recorded Scope Assessment stating exactly which control cannot apply and why; a prior, unrelated approval never substitutes; citing a standing waiver requires quoting its exact recorded text |
+| Disagreement arbitration | Test Engineer and Code Reviewer reach opposite conclusions on the same question | Both positions stated plainly, with any EM first-attempt disclosed; the Human decides, not the EM by tie-break |
+| Human Approval Brief (Stage 13 -> 14) | Every milestone, before commit | Full Section 2a field set |
+| Commit | Every commit | An explicit instruction naming this specific action |
+| Push | Every push | A separate explicit instruction, even immediately after a Commit approval |
+| Infrastructure change (Stage 17) | Any privileged command against a live, unversioned, root-owned system | A pre-diffed proposed change, a named rollback command, confirmation no subagent charter covers this file type |
+| Editing an already-shipped file for a non-regression reason | Refactor, extraction, or cleanup of previously-approved code with no verified regression behind it | The specific issue named, weighed explicitly against the blast-radius cost of touching shipped code |
+| ROADMAP.md status change | Marking any feature Completed | Never made while a relevant review is still open |
 
-1. Implementation is complete.
-2. A Scope Assessment (Section 6, step 5) has been recorded for both the
-   Test Engineer and the Code Reviewer. Any control that does not apply
-   per its written charter has an explicit, human-approved Waiver on
-   record — never silently omitted or silently substituted.
-3. An independent Test Engineer review has been performed, or its
-   omission is covered by an approved Waiver from gate 2.
-4. Every Blocking and Major issue found (where a Test Engineer review was
-   performed) has been resolved.
-5. An independent re-test has confirmed the fixes and found no
-   regressions (where a Test Engineer review was performed).
-6. An independent Code Reviewer review has been performed, or any use of
-   it outside its written charter is covered by an approved Waiver from
-   gate 2.
-7. Every Blocking and Major issue found has been resolved.
-8. A final re-test has been performed if any code changed after the
-   review.
-9. PROJECT_LOG.md has been updated to reflect the above, including any
-   Waivers granted.
+## 7. Implementation Stop Conditions
 
-## 8. Progress Reporting
+Routine gates (Section 6) are decision points reached in the normal stage order. Stop Conditions are
+exception paths triggered out of order, at any stage, by new evidence. A Stop pauses only the affected
+stage's work -- unrelated milestones already in flight are unaffected.
 
-- The human is told, briefly, when a subagent is launched and what it is
-  doing, before its result is known.
-- Subagent findings are never predicted, assumed, or fabricated ahead of
-  the actual result; they are reported only once the subagent's output has
-  actually been received.
-- Findings are reported with their severity classification intact
-  (Blocking / Major / Minor), not summarized away.
-- State changes that would be hard to reverse or that assert a feature is
-  further along than independently confirmed (for example, marking
-  ROADMAP.md Completed) are not made while a relevant review is still in
-  progress; where this creates a timing choice, the human is asked rather
-  than the Engineering Manager guessing.
-- Status updates are concise: what changed, what was found, what happens
-  next.
+| # | Condition | Who May Trigger | Required Documentation | How Work Resumes | Human Approval to Continue? |
+|---|---|---|---|---|---|
+| 1 | Investigation disproves the proposed mechanism | Architecture Lead during Stage 2/3; any Lead or subagent who finds it later | The specific disproof and evidence | A new mechanism proposal returns to Stage 3 -- never patched onto the disproven one | Yes -- re-enters Stage 4 for the new mechanism |
+| 2 | Production data contradicts assumptions | Anyone who observes it directly against real data, not secondhand | The specific contradicting record(s), verified directly | Returns to Stage 2 to re-verify the corrected assumption | Yes, if the correction changes the design; No, if it only changes an implementation detail |
+| 3 | Architecture assumptions become invalid | Architecture Lead, or any Lead who discovers the conflict while implementing | Which existing architecture decision is contradicted, and why | Returns to Stage 3/4 as an explicit architecture amendment | Yes -- a Permanent Human Governance item |
+| 4 | Schema compatibility breaks | Backend Lead / Data Pipeline Engineer, or Code Reviewer at Stage 10 | The exact incompatibility | Returns to Stage 3 as a new major-version proposal -- never shipped as a minor/patch bump | Yes, always |
+| 5 | Blast radius exceeds approved design | Any Lead who finds the change now needs a file, module, or already-shipped feature outside the Stage 3 proposal's stated scope | The specific newly-implicated file(s) and why | Presented as an explicit scope-expansion request before implementing it | Yes, for the expanded scope specifically |
+| 6 | A Blocking review finding is discovered | Code Reviewer, Test Engineer, or the EM's own Stage 6 self-audit | The finding itself, filed at Blocking severity (Section 5) | Fixed and independently re-verified (Stage 11) before Stage 12 begins | No additional approval to perform the fix; the milestone cannot advance without it |
+| 7 | A previously unknown dependency appears | Anyone who discovers a dependency not named in the Stage 3 proposal | What the dependency is and what about it is unverified | A targeted Stage 2 investigation of that dependency specifically | Yes, if it touches a protected file, infrastructure, or an already-shipped feature; No, if fully within the current Lead's own boundary |
+| 8 | Implementation would require modifying already-approved architecture | Any Lead | Which decision would need to change, and what alternative was originally rejected, if recorded | Returns to Stage 3/4 as a formal architecture amendment | Yes, always -- a Permanent Human Governance item |
 
-## 9. Human Approval Brief Requirements
+## 8. Mandatory Checklists
 
-Every feature's final Human Approval Brief has consistently included:
+### Implementation
 
-- Feature Summary
-- Files Changed
-- Tests Created
-- Tests Executed
-- Test Results
-- Scope Assessments and Waivers (any control that did not apply per its
-  written charter, per Section 6 step 5 — never left implicit by simply
-  omitting the line below it)
-- Test Engineer Recommendation
-- Code Reviewer Recommendation
-- Remaining Known Limitations
-- Documentation Updated
-- Git Status
+- New capability lives in its own standalone module, not woven into an existing incremental engine,
+  unless explicitly justified otherwise. (Always)
+- Schema changes are additive only; version bump recorded. (Every schema-touching milestone)
+- No already-shipped file touched without a verified regression or explicit approval, checked via
+  `git diff`, not assumed. (Always)
+- Every numeric/derived field has an explicit non-finite / divide-by-zero guard where inputs can be
+  missing or extreme. (Every milestone computing a derived numeric field)
+- Parallel code paths performing the same risky operation (e.g. two file reads) have identical
+  defensive handling. (Always)
+- Already-tested validation and math primitives are reused rather than reimplemented across milestones.
+  (Always)
 
-Where a Waiver applies, the corresponding recommendation line states
-"N/A — waived" and points to the recorded Scope Assessment, rather than
-being silently omitted from the Brief.
+### Testing
 
-Test Engineer and Code Reviewer reports have consistently closed with one
-of three recommendations: **APPROVE**, **APPROVE WITH KNOWN LIMITATIONS**,
-or **DO NOT APPROVE**.
+- Full suite green before and after every fix round. (Always)
+- New test files isolate any new state-path parameter -- grep every existing caller of the changed
+  function, not just files touched this milestone. (Every milestone adding a state-path parameter)
+- Every sibling field feeding the same downstream function is validated the same way as the field that
+  prompted the fix. (Every validation-gap fix)
+- Protected production files (`pool_stats.json`, `historical_data.json`, `parse_pool_stats.py`,
+  `ckpool.conf`) confirmed untouched -- by checksum if the file lives outside this git repository.
+  (Always)
+- Real-browser verification run at a desktop and a 375px viewport, zero console/page errors. (Every
+  frontend-touching milestone)
+- Where a retired component is replaced, its full prior feature set is explicitly checklisted against
+  the replacement. (Every retirement/replacement milestone)
 
-Beginning with Feature 004 (run as a "Controlled Autonomy Trial"), the
-Human Approval Brief additionally included an Engineering Metrics section
-(elapsed time, approximate AI working time, approximate tokens consumed,
-human interruptions, number of approvals requested) and a Controlled
-Autonomy Assessment section (autonomous decisions made, where human
-boundaries were required, and recommendations for future autonomy), and
-the brief itself closed with the same three-way recommendation line used
-by the subagents. Features 002 and 003 did not include these additional
-sections.
+### Documentation
+
+- `docs/ARCHITECTURE.md` and `docs/DESIGN_SYSTEM.md` grepped for every reference to the changed
+  module/schema/component. (Always)
+- Every stale cross-reference found is fixed in the same milestone, not deferred. (Always)
+- `PROJECT_LOG.md` entry includes brief, investigation (if any), design decision, findings by round,
+  fixes, carried-forward limitations. (Always)
+- Any Human decision overturning a prior recorded decision states the reversal explicitly. (Every
+  reversal)
+
+### Review
+
+- Scope Assessment recorded for both Test Engineer and Code Reviewer before either is invoked or
+  waived. (Always)
+- Any waiver cited quotes its recorded text verbatim, with a pointer to where it lives. (Every waiver
+  citation)
+- Round 2+ review dispatches carry the specific findings list plus a diff, not a re-review instruction.
+  (Every re-review)
+- Every finding is classified per Section 5 and, where Blocking or Major, independently re-verified per
+  the Section 4 standard. (Always)
+- Minor findings are fixed immediately or explicitly carried forward -- never silently dropped. (Always)
+
+### Deployment
+
+- Commit approval and push approval requested and recorded separately. (Always)
+- Backup taken and checksum-verified before the edit. (Every infrastructure change)
+- Syntax/dry-run test passed before any reload/apply. (Every infrastructure change)
+- Post-change verification checks the running state (loaded config, active service), not just the file
+  on disk. (Every infrastructure change)
+- A named, tested rollback command exists and is recorded, whether or not needed. (Every infrastructure
+  change)
+
+### Milestone Closure
+
+- Stage 6 self-audit result present in the Human Approval Brief. (Always)
+- Live/production behavior independently confirmed, not assumed from a successful commit. (Always)
+- `PROJECT_LOG.md` and `ROADMAP.md` updated in the same approved action. (Always)
+- Any open, disclosed limitation is recorded as carried-forward with enough context to avoid
+  rediscovery. (Always)
+
+## 9. Engineering Flow Diagram
+
+`◆` = mandatory Human approval gate. `▸` = conditional stage.
+
+```
+ 01 Feature / Milestone Proposal
+      |
+ 02 Investigation                          ▸ mandatory only if an empirical claim is load-bearing
+      |
+ 03 Design Proposal (architecture + technical design, one document)
+      |
+ ◆ 04 HUMAN APPROVAL — Design
+      |
+ 05 Implementation
+      |
+ 06 Pre-Completion Self-Audit               (result mandatory in Stage 13)
+      |
+      +----------------------+
+      |                       |
+ 07 Backend Testing      08 Frontend Testing + Browser Verification
+      |                       |
+      +-----------+-----------+
+                  |
+ 09 Integration / Multi-Scope Testing       ▸ conditional: shared-contract changes only
+                  |
+ 10 Independent Code Review  (round 2+: targeted re-review against a diff, not a re-read)
+                  |
+ 11 Fix + Re-Verify   <-- loops back to 10 if a fresh review pass is warranted
+                  |
+ 12 Documentation Sync
+                  |
+ 13 Human Approval Brief
+                  |
+ ◆ 14 HUMAN FINAL APPROVAL
+                  |
+ ◆ 15 COMMIT
+                  |
+ ◆ 16 PUSH
+                  |
+ 17 Infrastructure Change Protocol           ▸ conditional: Nginx / cron / systemd only
+      (each privileged step is its own ◆)
+                  |
+ 18 Production Verification & Milestone Closure
+      (PROJECT_LOG.md + ◆ ROADMAP.md status, same approved action)
+```
+
+Any stage may emit a Stop per Section 7; work returns to the stage Section 7 names for that condition,
+not to the stage where the stop occurred.
 
 ## 10. Engineering Principles
 
-- Build incrementally; each step is testable before the next begins.
-- Reuse already-tested validation and math primitives across features
-  rather than reimplementing them.
-- Prefer separate files and small functions; keep frontend and backend
-  work separate.
-- Validation at a data boundary (for example, a username or workername
-  field) strips only to decide validity — it never alters the value that
-  is stored or returned.
-- Previously shipped feature files are not modified except to fix a
-  verified regression introduced by the current feature; this is checked
-  directly (for example, via `git diff` against the last commit) rather
-  than assumed.
-- Every finding from Test Engineer or Code Reviewer is classified by
-  severity; Blocking and Major findings are always resolved before
-  proceeding, Minor findings are either fixed immediately (if cheap and
-  unambiguous) or explicitly carried forward in PROJECT_LOG.md, never
-  silently dropped.
-- Fixes are independently verified — by direct testing of the specific
-  scenario, not merely by re-reading the code — before being reported as
-  resolved.
-- Reported metrics and claims are only as precise as what is actually
-  measured; where a figure cannot be measured (for example, wall-clock
-  human waiting time), that limitation is stated rather than a number
-  being invented.
-- Production data and already-shipped output formats (pool_stats.json,
-  historical_data.json, the existing parse_pool_stats.py parser) are never
-  touched by this workflow.
+| Principle | Rule |
+|---|---|
+| Additive-first | Every schema change adds; none remove or reshape |
+| Smallest blast radius | New capability gets a standalone module; a duplicated helper is preferred over an unapproved edit to a shipped file |
+| Investigation before mechanism | When a design depends on an empirical claim, verify it against real data before proposing the mechanism, and state plainly what remains unproven |
+| Evidence over assumption | "It hasn't broken" is not the same claim as "it's verified" |
+| Waivers are literal | A waiver's recorded text is quoted exactly, every time; it never auto-extends to a new phase, file type, or neighboring case |
+| Documentation sync is Definition of Done | Not a thing a reviewer happens to catch -- see Stage 12 |
+| No silent self-declared completion | A milestone is done when the Stage 6 checklist says so in writing, before the Human is asked to approve anything |
+| Every fix earns a regression test | Aimed at the exact defect found, not a general strengthening |
+| Independent verification means re-deriving, not re-reading | Per Section 4 -- targeted re-review checks the claimed fix against the specific finding and the diff |
+| Severity reflects the defect, not the effort to fix it | Per Section 5 -- a finding is never downgraded because a fix looks easy |
+| Reuse over reimplementation | Already-tested validation and math primitives are reused across milestones rather than duplicated |
+| Production is never the test bed | Read-only against real logs where evidence requires it; writes only to isolated, gitignored, or explicitly-scoped paths; every new state-path parameter is checked against every existing test caller. Production data and already-shipped output formats (`pool_stats.json`, `historical_data.json`, `parse_pool_stats.py`) are never touched by this workflow |
+| Precision matches what was measured | A reported figure is only as precise as what was actually measured; where something cannot be measured, that limitation is stated rather than a number invented |
+
+**Progress reporting**, carried forward unchanged: the Human is told, briefly, when a subagent is
+launched and what it is doing, before its result is known. Subagent findings are never predicted,
+assumed, or fabricated ahead of the actual result. Findings are reported with their severity
+classification intact, not summarized away. State changes that would be hard to reverse, or that assert
+a milestone is further along than independently confirmed, are not made while a relevant review is still
+in progress.
+
+For the full historical review and rationale behind this document, see `docs/PHASE_E_POSTMORTEM.md`.

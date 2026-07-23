@@ -502,8 +502,13 @@ agents.
 reason as QA/Test Engineer (Section 11) — it cannot itself act on any
 Section 16 boundary, only report findings that may imply one.
 
-**Currently scoped to:** Python code specifically, per its own definition
-file — the same scope caveat as QA/Test Engineer applies.
+**Currently scoped to:** Python code, per its own definition file, **plus Damopool frontend
+HTML/CSS/JS** under the standing Phase E waiver (`PROJECT_LOG.md`, 2026-07-19, reaffirmed by
+`DEVELOPMENT_PROCESS.md` v2.0) — this frontend extension is now written into
+`.claude/agents/code-reviewer.md` itself rather than being a per-milestone disclosed exception,
+reflecting a track record of real, correctly-classified findings and zero confirmed false positives
+across every Phase D/E frontend milestone. QA/Test Engineer's scope caveat (Python/sharelog only) is
+unchanged and does not carry the same extension.
 
 ## 13. Release Manager
 
