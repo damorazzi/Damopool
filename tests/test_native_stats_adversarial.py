@@ -37,13 +37,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ckpool_native_stats as cns
 import analytics_builder as ab
+import histogram_builder
 
 
 class TempLogsDirMixin:
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="damopool_cnsadv_")
 
+        self._orig_histogram_state_path = histogram_builder.STATE_PATH
+        self._orig_network_diff_state_path = cns.NETWORK_DIFF_STATE_PATH
+        histogram_builder.STATE_PATH = os.path.join(self.tmpdir, "histogram.state.json")
+        cns.NETWORK_DIFF_STATE_PATH = os.path.join(self.tmpdir, "network_diff.state.json")
+
     def tearDown(self):
+        histogram_builder.STATE_PATH = self._orig_histogram_state_path
+        cns.NETWORK_DIFF_STATE_PATH = self._orig_network_diff_state_path
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def pool_status_path(self):

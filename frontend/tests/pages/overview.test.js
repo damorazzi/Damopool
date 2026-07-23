@@ -5,30 +5,30 @@ import {
   transformOverviewData,
   isOverviewEmpty,
   deriveOverviewState,
-  buildPoolWindowsChartOption,
-  buildPoolWindowsChartSummary,
   buildOverviewSpec,
   mount,
   unmount,
 } from "../../src/pages/overview.js";
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
+import { BUCKET_COUNT } from "../../src/charts/histogram-chart.js";
+
+function emptyBucketData() {
+  return { bucket_counts: new Array(BUCKET_COUNT).fill(0), bucket_best: new Array(BUCKET_COUNT).fill(null) };
+}
 
 function fullPayload(overrides = {}) {
   return {
-    metadata: { schema_version: "1.1", generated_at: new Date().toISOString(), ...overrides.metadata },
+    metadata: { schema_version: "1.3", generated_at: new Date().toISOString(), ...overrides.metadata },
     pool: {
       accepted_count: 1000,
       rejected_count: 5,
       best_share_today: { username: "alice", workername: "rig1", sdiff: 512.5, timestamp: "unknown" },
       best_share_ever: { username: "bob", workername: "rig2", sdiff: 2048, timestamp: "unknown" },
-      rolling_windows: {
-        "15m": { accepted: 10, rejected: 0, average_sdiff: 100, share_frequency_per_minute: 0.5 },
-        "1h": { accepted: 40, rejected: 1, average_sdiff: 120, share_frequency_per_minute: 0.6 },
-        "24h": { accepted: 900, rejected: 4, average_sdiff: 110, share_frequency_per_minute: 0.6 },
-      },
       hashrate_1m: 13400000000000,
       hashrate_24h: 12500000000000,
+      network_difficulty: 127170500429035.2,
+      difficulty_histogram: { "1d": emptyBucketData(), total: emptyBucketData() },
       ...overrides.pool,
     },
     users: {},
@@ -71,7 +71,6 @@ test("transformOverviewData", async (t) => {
     assert.equal(data.rejectedCount, 5);
     assert.deepEqual(data.bestShareToday, payload.pool.best_share_today);
     assert.deepEqual(data.bestShareEver, payload.pool.best_share_ever);
-    assert.deepEqual(data.rollingWindows, payload.pool.rolling_windows);
   });
 
   await t.test("Phase E Milestone 28: extracts hashrate_1m/hashrate_24h as hashrate1m/hashrate24h", () => {
@@ -81,14 +80,27 @@ test("transformOverviewData", async (t) => {
     assert.equal(data.hashrate24h, 12500000000000);
   });
 
+  await t.test("Phase E Milestone 29: extracts difficulty_histogram and network_difficulty verbatim", () => {
+    const payload = fullPayload();
+    const data = transformOverviewData(payload);
+    assert.deepEqual(data.difficultyHistogram, payload.pool.difficulty_histogram);
+    assert.equal(data.networkDifficulty, 127170500429035.2);
+  });
+
+  await t.test("a missing difficulty_histogram degrades to an empty (all-zero) shape, never a missing key", () => {
+    const data = transformOverviewData({ metadata: {}, pool: {} });
+    assert.deepEqual(Object.keys(data.difficultyHistogram).sort(), ["1d", "total"]);
+    assert.ok(data.difficultyHistogram["1d"].bucket_counts.every((c) => c === 0));
+  });
+
   await t.test("degrades gracefully when pool/metadata fields are missing", () => {
     const data = transformOverviewData({ metadata: {}, pool: {} });
     assert.equal(data.generatedAt, null);
     assert.equal(data.acceptedCount, undefined);
     assert.equal(data.bestShareToday, null);
-    assert.deepEqual(data.rollingWindows, {});
     assert.equal(data.hashrate1m, undefined);
     assert.equal(data.hashrate24h, undefined);
+    assert.equal(data.networkDifficulty, undefined);
   });
 });
 
@@ -160,50 +172,6 @@ test("deriveOverviewState", async (t) => {
   });
 });
 
-test("buildPoolWindowsChartOption", async (t) => {
-  await t.test("maps each rolling window's average_sdiff into series data, in 15m/1h/24h order", () => {
-    const option = buildPoolWindowsChartOption(fullPayload().pool.rolling_windows);
-    assert.deepEqual(option.series[0].data, [100, 120, 110]);
-    assert.deepEqual(option.xAxis.data, ["15 min", "1 hour", "24 hours"]);
-  });
-
-  await t.test("a missing window becomes a null data point, not zero or a throw", () => {
-    const option = buildPoolWindowsChartOption({ "1h": { average_sdiff: 50 } });
-    assert.deepEqual(option.series[0].data, [null, 50, null]);
-  });
-
-  await t.test("null/undefined rolling_windows produces an all-null series", () => {
-    assert.deepEqual(buildPoolWindowsChartOption(null).series[0].data, [null, null, null]);
-    assert.deepEqual(buildPoolWindowsChartOption(undefined).series[0].data, [null, null, null]);
-  });
-
-  await t.test("theme fragments are threaded through to the option", () => {
-    const theme = { accentColor: "#ffd700", backgroundColor: "transparent" };
-    const option = buildPoolWindowsChartOption({}, theme);
-    assert.equal(option.series[0].itemStyle.color, "#ffd700");
-    assert.equal(option.backgroundColor, "transparent");
-  });
-});
-
-test("buildPoolWindowsChartSummary", async (t) => {
-  await t.test("describes every window's value in the accessible summary text", () => {
-    const summary = buildPoolWindowsChartSummary(fullPayload().pool.rolling_windows);
-    assert.match(summary, /15 min/);
-    assert.match(summary, /1 hour/);
-    assert.match(summary, /24 hours/);
-  });
-
-  await t.test("a missing window reads as 'no data', not a blank or NaN", () => {
-    const summary = buildPoolWindowsChartSummary({});
-    assert.match(summary, /15 min: no data/);
-  });
-
-  await t.test("uses formatSdiff's full precision, not formatCompactSdiff's abbreviation -- this is accessible/screen-reader text (docs/ARCHITECTURE.md Section 17), not the visible chart (Code Review finding, Phase E Milestone 25: this exact function was accidentally switched to compact formatting and reverted -- the original fixture values here were all under 1000, where both formatters coincidentally produce identical output, which is why that regression shipped undetected)", () => {
-    const summary = buildPoolWindowsChartSummary({ "15m": { average_sdiff: 12345.67 } });
-    assert.match(summary, /12,345\.67/, "full comma-separated precision, not a compact abbreviation like \"12.35K\"");
-  });
-});
-
 test("buildOverviewSpec", async (t) => {
   await t.test("loading state renders skeletons, no stat tiles or chart", () => {
     const spec = buildOverviewSpec({ status: "loading" });
@@ -240,12 +208,38 @@ test("buildOverviewSpec", async (t) => {
     assert.equal(findByClassName(spec, "chart-panel"), null);
   });
 
-  await t.test("success state renders stat tiles and a chart panel, no banner", () => {
+  await t.test("success state renders stat tiles and the histogram panel, no banner", () => {
     const data = transformOverviewData(fullPayload());
     const spec = buildOverviewSpec({ status: "success", data, error: null, isStale: false });
     assert.ok(findByClassName(spec, "tile-grid"));
     assert.ok(findByClassName(spec, "chart-panel"));
+    assert.ok(findByClassName(spec, "histogram-panel"));
+    assert.ok(findByClassName(spec, "dataset-toggle"));
     assert.equal(findByClassName(spec, "error-banner"), null);
+  });
+
+  await t.test("Phase E Milestone 29: histogram panel titled 'Pool Share Difficulty Histogram'", () => {
+    const data = transformOverviewData(fullPayload());
+    const spec = buildOverviewSpec({ status: "success", data, error: null, isStale: false });
+    const panel = findByClassName(spec, "histogram-panel");
+    assert.equal(findByClassName(panel, "card__header").text, "Pool Share Difficulty Histogram");
+  });
+
+  await t.test("defaults to the '1 Day' dataset when histogramDataset is not supplied", () => {
+    const data = transformOverviewData(fullPayload());
+    const spec = buildOverviewSpec({ status: "success", data, error: null, isStale: false });
+    const toggle = findByClassName(spec, "dataset-toggle");
+    const activeButton = toggle.children.find((b) => b.className.includes("--active"));
+    assert.equal(activeButton.attrs["data-dataset"], "1d");
+  });
+
+  await t.test("honors an explicit histogramDataset selection ('total')", () => {
+    const data = transformOverviewData(fullPayload());
+    const spec = buildOverviewSpec({ status: "success", data, error: null, isStale: false, histogramDataset: "total" });
+    const toggle = findByClassName(spec, "dataset-toggle");
+    const activeButton = toggle.children.find((b) => b.className.includes("--active"));
+    assert.equal(activeButton.attrs["data-dataset"], "total");
+    assert.match(findByClassName(spec, "chart-panel__summary").text, /Total \(Lifetime\)/);
   });
 
   await t.test("success + error (cached fallback) shows the error banner above the live content", () => {
@@ -331,12 +325,20 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     return {};
   }
 
+  // Milestone 29's defaultRender contract returns { canvasNode,
+  // toggleButtonNodes } rather than a bare canvas node -- every fake
+  // render below that used to return `null`/a bare marker object now
+  // returns this shape instead.
+  function fakeRenderResult(canvasNode = null, toggleButtonNodes = []) {
+    return { canvasNode, toggleButtonNodes };
+  }
+
   await t.test("renders loading synchronously, then the fetch result once it resolves", async () => {
     const container = fakeContainer();
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -356,7 +358,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
   await t.test("throws on a second mount() without an intervening unmount()", () => {
     const container = fakeContainer();
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
     mount(container, { fetchImpl, render });
@@ -372,7 +374,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
 
     let releaseFetch;
@@ -413,7 +415,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const oldRenders = [];
       const oldRender = (target, spec) => {
         oldRenders.push(spec);
-        return null;
+        return fakeRenderResult();
       };
 
       mount(container, { fetchImpl: oldFetchImpl, render: oldRender });
@@ -424,7 +426,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const newRenders = [];
       const newRender = (target, spec) => {
         newRenders.push(spec);
-        return null;
+        return fakeRenderResult();
       };
       const newFetchImpl = async () => ({
         ok: true,
@@ -452,7 +454,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
   await t.test("mount() writes the fetched payload into core/state.js so shell.js's staleness text can read it", async () => {
     const container = fakeContainer();
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const payload = fullPayload();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => payload });
 
@@ -466,7 +468,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
   await t.test("a total failure (no cache) does not overwrite state.js with null", async () => {
     const container = fakeContainer();
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const fetchImpl = async () => {
       throw new TypeError("Failed to fetch");
     };
@@ -488,7 +490,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
     const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -518,7 +520,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
     const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -538,7 +540,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const disposeCalls = [];
     // A fake canvas marker and a fake createChartImpl -- neither
     // touches real DOM/ECharts.
-    const render = () => ({ fakeCanvas: true });
+    const render = () => fakeRenderResult({ fakeCanvas: true });
     const createChartImpl = () => ({
       update() {},
       dispose() {
@@ -570,7 +572,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const disposeCalls = [];
       const updateCalls = [];
       let createCalls = 0;
-      const render = () => ({ fakeCanvas: true });
+      const render = () => fakeRenderResult({ fakeCanvas: true });
       const createChartImpl = () => {
         createCalls += 1;
         return {
@@ -614,7 +616,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
     const container = fakeContainer();
     const disposeCalls = [];
-    const render = () => ({ fakeCanvas: true });
+    const render = () => fakeRenderResult({ fakeCanvas: true });
     const createChartImpl = () => ({
       update() {
         throw new Error("update() must not be called across a status change");
@@ -652,7 +654,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
   await t.test("repaints the chart when the active theme changes, but not for an unrelated state.js change", async () => {
     const container = fakeContainer();
     const updateCalls = [];
-    const render = () => ({ fakeCanvas: true });
+    const render = () => fakeRenderResult({ fakeCanvas: true });
     const createChartImpl = () => ({
       update(option) {
         updateCalls.push(option);
@@ -684,7 +686,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -704,7 +706,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -717,5 +719,84 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     assert.equal(renders.length, 3);
     assert.equal(renders[2].className, "overview-page");
     assert.deepEqual(renders[2].children, []);
+  });
+
+  // Phase E Milestone 29: the dataset-toggle wiring.
+  await t.test("clicking the 'Total' toggle button switches the active dataset and updates the chart in place", async () => {
+    const container = fakeContainer();
+    const updateCalls = [];
+    let toggleButtons = [];
+
+    function fakeButtonNode(datasetKey) {
+      return {
+        listeners: {},
+        getAttribute(name) {
+          return name === "data-dataset" ? datasetKey : null;
+        },
+        addEventListener(type, fn) {
+          this.listeners[type] = fn;
+        },
+      };
+    }
+
+    const render = () => {
+      toggleButtons = [fakeButtonNode("1d"), fakeButtonNode("total")];
+      return fakeRenderResult({ fakeCanvas: true }, toggleButtons);
+    };
+    const createChartImpl = () => ({
+      update(option) {
+        updateCalls.push(option);
+      },
+      dispose() {},
+    });
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
+    const readThemeTokensImpl = () => ({});
+
+    mount(container, { fetchImpl, render, createChartImpl, readThemeTokensImpl });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(updateCalls.length, 0, "no update yet -- chart was just created");
+
+    toggleButtons[1].listeners.click();
+    assert.equal(updateCalls.length, 1, "clicking a different dataset must update the existing chart, not recreate it");
+  });
+
+  await t.test("clicking the already-active dataset button is a no-op", async () => {
+    const container = fakeContainer();
+    const updateCalls = [];
+    let toggleButtons = [];
+
+    function fakeButtonNode(datasetKey) {
+      return {
+        listeners: {},
+        getAttribute(name) {
+          return name === "data-dataset" ? datasetKey : null;
+        },
+        addEventListener(type, fn) {
+          this.listeners[type] = fn;
+        },
+      };
+    }
+
+    const render = () => {
+      toggleButtons = [fakeButtonNode("1d"), fakeButtonNode("total")];
+      return fakeRenderResult({ fakeCanvas: true }, toggleButtons);
+    };
+    const createChartImpl = () => ({
+      update(option) {
+        updateCalls.push(option);
+      },
+      dispose() {},
+    });
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
+    const readThemeTokensImpl = () => ({});
+
+    mount(container, { fetchImpl, render, createChartImpl, readThemeTokensImpl });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    toggleButtons[0].listeners.click(); // already "1d", the default
+    assert.equal(updateCalls.length, 0, "clicking the currently-active dataset must not trigger an update");
   });
 });

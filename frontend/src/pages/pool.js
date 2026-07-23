@@ -160,8 +160,10 @@ export function buildPercentilesChartOption(percentiles, theme = {}) {
 // Feeds chartPanelSpec's `summary` prop -- accessible, screen-reader
 // text (docs/ARCHITECTURE.md Section 17), not the visible chart.
 // Deliberately full-precision formatSdiff, not formatCompactSdiff
-// (Phase E Milestone 25) -- see overview.js's buildPoolWindowsChartSummary
-// for the same reasoning and the same accidental-then-reverted history.
+// (Phase E Milestone 25) -- see histogram-chart.js's own
+// buildHistogramChartSummary for the same reasoning; this page's own
+// chart (percentiles, not the difficulty histogram) is unaffected by
+// and out of scope for Milestone 29.
 export function buildPercentilesChartSummary(percentiles) {
   const parts = PERCENTILE_ORDER.map((key) => {
     const value = percentiles && percentiles[key];

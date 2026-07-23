@@ -22,6 +22,8 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import analytics_builder as ab
+import histogram_builder
+import ckpool_native_stats
 
 
 def make_share(username="u1", workername="u1.w1", agent="agent", diff=1,
@@ -50,7 +52,28 @@ class TempLogDirMixin:
         # touched by tests (mirrors the existing logs_dir isolation).
         self.state_path = os.path.join(self.tmpdir, "analytics.state.json")
 
+        # Phase E Milestone 29: build_analytics() gained two more state
+        # paths (histogram_builder.STATE_PATH, ckpool_native_stats.
+        # NETWORK_DIFF_STATE_PATH), each defaulting to a real production
+        # file when not passed explicitly -- the exact same risk
+        # state_path itself already existed to prevent. Rather than
+        # touching every one of this file's many existing
+        # ab.build_analytics(...) call sites (most of which predate this
+        # milestone and don't pass the two new keyword arguments at all),
+        # patch the modules' own default constants for the duration of
+        # each test, so every call automatically resolves to an isolated
+        # temp path regardless of which keyword arguments it happens to
+        # pass -- the same safety net, applied where retrofitting every
+        # call site individually would be impractical and easy to get
+        # wrong by missing just one.
+        self._orig_histogram_state_path = histogram_builder.STATE_PATH
+        self._orig_network_diff_state_path = ckpool_native_stats.NETWORK_DIFF_STATE_PATH
+        histogram_builder.STATE_PATH = os.path.join(self.tmpdir, "histogram.state.json")
+        ckpool_native_stats.NETWORK_DIFF_STATE_PATH = os.path.join(self.tmpdir, "network_diff.state.json")
+
     def tearDown(self):
+        histogram_builder.STATE_PATH = self._orig_histogram_state_path
+        ckpool_native_stats.NETWORK_DIFF_STATE_PATH = self._orig_network_diff_state_path
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def write_sharelog(self, name, lines):
@@ -574,10 +597,13 @@ class TestLiveTicker(TempLogDirMixin, unittest.TestCase):
 # 7b. Phase E Milestone 28: native CKPool hashrate merge
 # ---------------------------------------------------------------------------
 class TestNativeHashrateMerge(TempLogDirMixin, unittest.TestCase):
-    def test_schema_version_bumped_to_1_2(self):
+    def test_schema_version_bumped_to_1_3(self):
+        # Milestone 29 bumped schema_version again (1.2 -> 1.3) for the
+        # additive difficulty_histogram/network_difficulty fields; this
+        # test's own subject (native hashrate merge) is unaffected.
         now = datetime(2026, 7, 16, tzinfo=timezone.utc)
         data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
-        self.assertEqual(data["metadata"]["schema_version"], "1.2")
+        self.assertEqual(data["metadata"]["schema_version"], "1.3")
 
     def test_pool_hashrate_merged_from_pool_status(self):
         now = datetime(2026, 7, 16, tzinfo=timezone.utc)

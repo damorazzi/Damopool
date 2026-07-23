@@ -1,0 +1,31 @@
+/* Phase E Milestone 29: the histogram panel's "1 Day" / "Total
+   (Lifetime)" dataset toggle (histogram-panel.js). Deliberately plain
+   -- Human Approval Brief: "no gradients, no animations, no glow" --
+   a bordered button group using only existing tokens, matching
+   badge.css's own restraint. */
+
+.dataset-toggle {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.dataset-toggle__button {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.dataset-toggle__button--active {
+  background: var(--color-surface-raised);
+  color: var(--color-accent-text);
+}

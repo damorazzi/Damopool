@@ -42,11 +42,24 @@ build (explicit Human requirement)."""
 import json
 import os
 import re
+import tempfile
 
 _UNIT_FACTORS = {"H": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12, "P": 1e15}
 _UNIT_PATTERN = re.compile(r"^([\d.]+)([A-Za-z]*)$")
 
 _EMPTY_HASHRATES = {"hashrate_1m": None, "hashrate_24h": None}
+
+# Phase E Milestone 29: the current Bitcoin network difficulty, for the
+# histogram's permanent marker. CKPool tracks this internally
+# (stratifier.c's stats->network_diff, derived from the block template it
+# requests from Bitcoin Core) and logs it -- only when it changes, roughly
+# every ~2 weeks matching real difficulty adjustments -- as a plain
+# LOGWARNING line in ckpool.log: "Network diff set to 127170500429035.2".
+# Confirmed against the real log during investigation; not exposed in any
+# snapshot file (pool.status's own "diff" field is a different thing --
+# percent-of-network-difficulty-accounted-for, not the value itself).
+NETWORK_DIFF_PATTERN = re.compile(r"Network diff set to ([\d.]+)")
+NETWORK_DIFF_STATE_PATH = "/home/damopool/ckpool-solo/ckpool/network_diff.state.json"
 
 
 def _parse_hashrate_string(value):
@@ -191,3 +204,117 @@ def read_native_hashrates(logs_dir):
         workers.update(worker_hashrates)
 
     return {"pool": pool, "users": users, "workers": workers}
+
+
+def _load_network_diff_state(state_path):
+    try:
+        with open(state_path, "r") as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {"offset": 0, "network_diff": None}
+    if not isinstance(state, dict):
+        return {"offset": 0, "network_diff": None}
+    offset = state.get("offset")
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+        offset = 0
+    network_diff = state.get("network_diff")
+    if network_diff is not None and (not isinstance(network_diff, (int, float)) or isinstance(network_diff, bool)):
+        network_diff = None
+    return {"offset": offset, "network_diff": network_diff}
+
+
+def _save_network_diff_state(state_path, state):
+    directory = os.path.dirname(state_path) or "."
+    fd, tmp_path = tempfile.mkstemp(prefix=".network_diff_state.", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(state, f)
+        os.chmod(tmp_path, 0o644)
+        os.replace(tmp_path, state_path)
+    except BaseException:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def read_network_difficulty(logs_dir, state_path=NETWORK_DIFF_STATE_PATH):
+    """Reads CKPool's own native network-difficulty log lines
+    incrementally -- tracks a byte offset across runs (the same idiom
+    histogram_builder.py uses for sharelogs, applied here to ckpool.log,
+    which is tens of MB and only ever grows) so this never re-scans the
+    whole file on every 5-minute run. Only bytes appended since the last
+    run are searched; if none contain the pattern (the overwhelmingly
+    common case, since network difficulty changes roughly every ~2
+    weeks), the previously cached value is returned unchanged. A file
+    that shrank since last check (rotation/truncation) resets the offset
+    and rescans the new file from its start.
+
+    Deliberately simpler than histogram_builder.py's sharelog tracking
+    (no fingerprint/consistency re-verification): a momentary read race
+    on this specific, rare, single-line log message has low real-world
+    consequence (the cached value just stays correct until the next
+    change, at most one analytics cycle later in the ordinary case) --
+    not the same correctness bar as never losing/double-counting an
+    individual solved share."""
+    log_path = os.path.join(logs_dir, "ckpool.log")
+
+    try:
+        current_size = os.path.getsize(log_path)
+    except OSError:
+        return None
+
+    state = _load_network_diff_state(state_path)
+    offset = state["offset"]
+    value = state["network_diff"]
+
+    if current_size < offset:
+        offset = 0
+        value = None
+
+    try:
+        with open(log_path, "rb") as f:
+            f.seek(offset)
+            new_bytes = f.read()
+    except OSError:
+        return value
+
+    # Only advance past confirmed complete lines -- a trailing partial
+    # line (this run landed mid-write) is left for a future run to
+    # re-read in full, matching this project's established incremental-
+    # read discipline (histogram_builder.py's/analytics_state.py's own
+    # _read_new_lines).
+    last_newline = new_bytes.rfind(b"\n")
+    if last_newline == -1:
+        new_offset = offset
+        new_text = ""
+    else:
+        new_offset = offset + last_newline + 1
+        new_text = new_bytes[: last_newline + 1].decode("utf-8", errors="replace")
+
+    for match in NETWORK_DIFF_PATTERN.finditer(new_text):
+        try:
+            candidate = float(match.group(1))
+        except ValueError:
+            continue
+        # Same non-finite guard as _parse_hashrate_string's own (Test
+        # Engineer finding, Milestone 28) -- NETWORK_DIFF_PATTERN's
+        # [\d.]+ can't itself produce "inf"/"nan" text, but an
+        # arbitrarily long/adversarial digit string can still overflow
+        # float() to inf with no exception raised. json.dump would then
+        # emit the non-standard "Infinity" token, which a strict/browser
+        # JSON.parse (analytics.json's only real consumer) rejects
+        # outright -- so a non-finite parse is discarded here, keeping
+        # whatever value was already cached, rather than ever reaching
+        # analytics.json.
+        if not (candidate == candidate) or candidate in (float("inf"), float("-inf")):
+            continue
+        value = candidate
+
+    try:
+        _save_network_diff_state(state_path, {"offset": new_offset, "network_diff": value})
+    except OSError:
+        pass  # best-effort persistence -- a future run will just re-scan a bit more
+
+    return value

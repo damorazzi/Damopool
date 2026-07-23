@@ -8,25 +8,36 @@ from datetime import datetime, timedelta, timezone
 from parse_share_analytics import LOGS_DIR, find_sharelog_files
 import analytics_state
 import ckpool_native_stats
+import histogram_builder
 
-# Phase E Milestone 28: additive, backward-compatible schema change (two
-# new hashrate_1m/hashrate_24h fields on pool/users/workers) -- bumped the
-# minor version per this project's own versioning discipline.
-SCHEMA_VERSION = "1.2"
+# Phase E Milestone 29: additive, backward-compatible schema change
+# (difficulty_histogram on pool/users/workers, network_difficulty on
+# pool) -- bumped the minor version again per this project's own
+# versioning discipline (Milestone 28 bumped 1.1 -> 1.2 for the same
+# reason).
+SCHEMA_VERSION = "1.3"
 GENERATOR = "analytics_builder.py"
 ANALYTICS_OUTPUT_PATH = "/home/damopool/ckpool-solo/ckpool/analytics.json"
 
+_EMPTY_HASHRATES = {"hashrate_1m": None, "hashrate_24h": None}
 
-def build_analytics(logs_dir=None, now=None, state_path=None):
+
+def build_analytics(logs_dir=None, now=None, state_path=None, histogram_state_path=None, network_diff_state_path=None):
     """now, if supplied, must be a timezone-aware UTC datetime. state_path
-    overrides analytics_state.STATE_PATH -- always pass an isolated path in
-    tests to avoid touching the real incremental state."""
+    overrides analytics_state.STATE_PATH; histogram_state_path overrides
+    histogram_builder.STATE_PATH; network_diff_state_path overrides
+    ckpool_native_stats.NETWORK_DIFF_STATE_PATH -- always pass isolated
+    paths in tests to avoid touching the real incremental state."""
     if logs_dir is None:
         logs_dir = LOGS_DIR
     if now is None:
         now = datetime.now(timezone.utc)
     if state_path is None:
         state_path = analytics_state.STATE_PATH
+    if histogram_state_path is None:
+        histogram_state_path = histogram_builder.STATE_PATH
+    if network_diff_state_path is None:
+        network_diff_state_path = ckpool_native_stats.NETWORK_DIFF_STATE_PATH
     today = now.date()
     yesterday = today - timedelta(days=1)
 
@@ -44,18 +55,35 @@ def build_analytics(logs_dir=None, now=None, state_path=None):
     # (implausible in practice, but not assumed impossible) contributes no
     # phantom user/worker entry of its own.
     native = ckpool_native_stats.read_native_hashrates(logs_dir)
+    network_difficulty = ckpool_native_stats.read_network_difficulty(logs_dir, state_path=network_diff_state_path)
 
-    pool_out = {**merged["pool"], **native["pool"]}
+    # Milestone 29: the Share Difficulty Distribution Histogram, generated
+    # by its own dedicated, independent module for the same
+    # separation-of-concerns reason as the native-hashrate reads above.
+    # Same "augment an already-existing entry, never create a phantom
+    # one" merge discipline: a user/worker analytics_state.py never saw
+    # any share for at all simply isn't in merged["users"]/["workers"] to
+    # begin with, so there's nothing to merge onto.
+    histograms = histogram_builder.build_histograms(logs_dir, now, state_path=histogram_state_path)
+
+    pool_out = {
+        **merged["pool"],
+        **native["pool"],
+        "network_difficulty": network_difficulty,
+        "difficulty_histogram": histograms["pool"],
+    }
 
     users_out = {}
     for username, record in merged["users"].items():
-        user_native = native["users"].get(username, {"hashrate_1m": None, "hashrate_24h": None})
-        users_out[username] = {**record, **user_native}
+        user_native = native["users"].get(username, dict(_EMPTY_HASHRATES))
+        user_histogram = histograms["users"].get(username, histogram_builder.empty_histogram_dataset_pair())
+        users_out[username] = {**record, **user_native, "difficulty_histogram": user_histogram}
 
     workers_out = {}
     for workername, record in merged["workers"].items():
-        worker_native = native["workers"].get(workername, {"hashrate_1m": None, "hashrate_24h": None})
-        workers_out[workername] = {**record, **worker_native}
+        worker_native = native["workers"].get(workername, dict(_EMPTY_HASHRATES))
+        worker_histogram = histograms["workers"].get(workername, histogram_builder.empty_histogram_dataset_pair())
+        workers_out[workername] = {**record, **worker_native, "difficulty_histogram": worker_histogram}
 
     metadata = {
         "schema_version": SCHEMA_VERSION,

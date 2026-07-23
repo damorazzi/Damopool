@@ -24,23 +24,28 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatSdiff, formatHashrate, formatRelativeTime, truncateWorkername } from "../core/format.js";
+import { formatCompactSdiff, formatHashrate, formatRelativeTime, truncateWorkername } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
 import { emptyStateSpec } from "../components/empty-state.js";
 import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
 import { errorBannerSpec } from "../components/error-banner.js";
-import { chartPanelSpec } from "../components/chart-panel.js";
+import { histogramPanelSpec } from "../components/histogram-panel.js";
 import { createChart } from "../charts/chart.js";
 import { buildEChartsTheme, readThemeTokens } from "../charts/theme-echarts.js";
+import {
+  DEFAULT_HISTOGRAM_DATASET,
+  emptyHistogramDatasetPair,
+  selectHistogramBucketData,
+  histogramDatasetLabel,
+  buildHistogramChartSummary,
+  buildHistogramChartOption,
+} from "../charts/histogram-chart.js";
 
 const ANALYTICS_ENDPOINT = "/analytics.json";
 
 export const route = { pattern: "/workers/:workername", name: "worker-detail" };
-
-const WINDOW_ORDER = ["15m", "1h", "24h"];
-const WINDOW_LABELS = { "15m": "15 min", "1h": "1 hour", "24h": "24 hours" };
 
 // -------------------------------------------------------------------
 // Pure data transformation
@@ -77,11 +82,15 @@ export function transformWorkerDetailData(payload, workername) {
     maxSdiff: record.max_sdiff,
     bestShareToday: record.best_share_today || null,
     bestShareEver: record.best_share_ever || null,
-    rollingWindows: record.rolling_windows || {},
     // Phase E Milestone 28: CKPool's own native per-worker hashrate,
     // read verbatim -- never estimated/calculated by this project.
     hashrate1m: record.hashrate_1m,
     hashrate24h: record.hashrate_24h,
+    // Phase E Milestone 29: this worker's own difficulty histogram
+    // (both datasets), plus the pool-wide network difficulty (only
+    // ever on payload.pool -- docs/ARCHITECTURE.md Section 25).
+    difficultyHistogram: record.difficulty_histogram || emptyHistogramDatasetPair(),
+    networkDifficulty: payload && payload.pool && payload.pool.network_difficulty,
   };
 }
 
@@ -97,59 +106,6 @@ export function deriveWorkerDetailState({ payload, workername, error = null, isS
   const data = transformWorkerDetailData(payload, workername);
   const status = data ? "success" : "not-found";
   return { status, data, workername, error, isStale: Boolean(isStale) };
-}
-
-// -------------------------------------------------------------------
-// Pure chart data transformation
-// -------------------------------------------------------------------
-
-export function buildWorkerWindowsChartOption(rollingWindows, theme = {}) {
-  const windows = rollingWindows || {};
-  const values = WINDOW_ORDER.map((key) => {
-    const avg = windows[key] && windows[key].average_sdiff;
-    return Number.isFinite(avg) ? avg : null;
-  });
-
-  return {
-    backgroundColor: theme.backgroundColor || "transparent",
-    textStyle: theme.textStyle || {},
-    grid: { left: 56, right: 16, top: 24, bottom: 32, containLabel: true },
-    xAxis: {
-      type: "category",
-      data: WINDOW_ORDER.map((key) => WINDOW_LABELS[key]),
-      axisLine: theme.axisLine || {},
-      axisLabel: theme.axisLabel || {},
-    },
-    yAxis: {
-      type: "value",
-      axisLine: theme.axisLine || {},
-      axisLabel: theme.axisLabel || {},
-      splitLine: theme.splitLine || {},
-    },
-    series: [
-      {
-        type: "bar",
-        data: values,
-        itemStyle: { color: theme.accentColor || undefined },
-        barMaxWidth: 48,
-      },
-    ],
-  };
-}
-
-// Feeds chartPanelSpec's `summary` prop -- accessible, screen-reader
-// text (docs/ARCHITECTURE.md Section 17), not the visible chart.
-// Deliberately full-precision formatSdiff, not formatCompactSdiff
-// (Phase E Milestone 25) -- see overview.js's buildPoolWindowsChartSummary
-// for the same reasoning and the same accidental-then-reverted history.
-export function buildWorkerWindowsChartSummary(rollingWindows) {
-  const windows = rollingWindows || {};
-  const parts = WINDOW_ORDER.map((key) => {
-    const avg = windows[key] && windows[key].average_sdiff;
-    const formatted = Number.isFinite(avg) ? formatSdiff(avg) : "no data";
-    return `${WINDOW_LABELS[key]}: ${formatted}`;
-  });
-  return `Average share difficulty by window -- ${parts.join(", ")}.`;
 }
 
 // -------------------------------------------------------------------
@@ -204,6 +160,19 @@ function statTilesSectionSpec(data) {
       statTileSpec({ label: "Worker Hashrate (1m)", value: formatHashrate(data.hashrate1m) }),
       statTileSpec({ label: "Worker Hashrate (24h)", value: formatHashrate(data.hashrate24h) }),
     ],
+  });
+}
+
+// Phase E Milestone 29: the one histogram section shared, byte-
+// identical logic-wise, with overview.js/user-detail.js -- only the
+// title and the supplied dataset differ per page.
+function histogramSectionSpec(data, histogramDataset) {
+  const bucketData = selectHistogramBucketData(data.difficultyHistogram, histogramDataset);
+  const label = histogramDatasetLabel(histogramDataset);
+  return histogramPanelSpec({
+    title: "Worker Share Difficulty Histogram",
+    summary: buildHistogramChartSummary(bucketData, data.networkDifficulty, label),
+    activeDataset: histogramDataset,
   });
 }
 
@@ -265,10 +234,7 @@ export function buildWorkerDetailSpec(state) {
       headerSpec(state.workername),
       ...banners,
       statTilesSectionSpec(state.data),
-      chartPanelSpec({
-        title: "Average Share Difficulty",
-        summary: buildWorkerWindowsChartSummary(state.data.rollingWindows),
-      }),
+      histogramSectionSpec(state.data, state.histogramDataset || DEFAULT_HISTOGRAM_DATASET),
     ],
   });
 }
@@ -286,7 +252,11 @@ function defaultRender(container, spec, { reuseCanvasNode = null } = {}) {
   }
 
   container.replaceChildren(node);
-  return reuseCanvasNode || freshCanvasNode;
+
+  return {
+    canvasNode: reuseCanvasNode || freshCanvasNode,
+    toggleButtonNodes: Array.from(node.querySelectorAll(".dataset-toggle__button")),
+  };
 }
 
 let isMounted = false;
@@ -295,7 +265,10 @@ let currentWorkername = null;
 let chartHandle = null;
 let chartCanvasNode = null;
 let renderedStatus = null;
-let lastRollingWindows = null;
+let currentDataset = DEFAULT_HISTOGRAM_DATASET;
+let lastDetailState = null;
+let lastDifficultyHistogram = null;
+let lastNetworkDifficulty = null;
 let lastAppliedTheme = null;
 let stopPollingFn = null;
 let stopThemeSubscription = null;
@@ -330,7 +303,10 @@ export function mount(
   chartHandle = null;
   chartCanvasNode = null;
   renderedStatus = null;
-  lastRollingWindows = null;
+  currentDataset = DEFAULT_HISTOGRAM_DATASET;
+  lastDetailState = null;
+  lastDifficultyHistogram = null;
+  lastNetworkDifficulty = null;
   stopPollingFn = null;
   stopThemeSubscription = null;
   currentRender = render;
@@ -344,7 +320,21 @@ export function mount(
   const safeStaleAfterMs = Number.isFinite(staleAfterMs) && staleAfterMs > 0 ? staleAfterMs : undefined;
   const fetchOptions = { fetchImpl, validate: validateSchema, staleAfterMs: safeStaleAfterMs };
 
+  function wireToggleButtons(toggleButtonNodes) {
+    for (const button of toggleButtonNodes || []) {
+      button.addEventListener("click", () => {
+        if (!isCurrent()) return;
+        const nextDataset = button.getAttribute("data-dataset");
+        if (!nextDataset || nextDataset === currentDataset) return;
+        currentDataset = nextDataset;
+        if (lastDetailState) renderState(lastDetailState);
+      });
+    }
+  }
+
   function renderState(detailState) {
+    lastDetailState = detailState;
+
     const reuseChart =
       renderedStatus === "success" && detailState.status === "success" && chartHandle && chartCanvasNode;
 
@@ -354,16 +344,21 @@ export function mount(
       chartCanvasNode = null;
     }
 
-    const spec = buildWorkerDetailSpec(detailState);
-    const canvasNode = render(container, spec, {
+    const spec = buildWorkerDetailSpec({ ...detailState, histogramDataset: currentDataset });
+    const nodes = render(container, spec, {
       reuseCanvasNode: reuseChart ? chartCanvasNode : null,
     });
+    const canvasNode = nodes && nodes.canvasNode;
     renderedStatus = detailState.status;
 
+    wireToggleButtons(nodes && nodes.toggleButtonNodes);
+
     if (canvasNode && detailState.status === "success") {
-      lastRollingWindows = detailState.data.rollingWindows;
+      lastDifficultyHistogram = detailState.data.difficultyHistogram;
+      lastNetworkDifficulty = detailState.data.networkDifficulty;
       const theme = buildEChartsTheme(readThemeTokensImpl());
-      const option = buildWorkerWindowsChartOption(lastRollingWindows, theme);
+      const bucketData = selectHistogramBucketData(lastDifficultyHistogram, currentDataset);
+      const option = buildHistogramChartOption(bucketData, lastNetworkDifficulty, theme);
       if (reuseChart) {
         chartHandle.update(option);
       } else {
@@ -391,9 +386,10 @@ export function mount(
     if (!isCurrent()) return;
     if (appState.theme === lastAppliedTheme) return;
     lastAppliedTheme = appState.theme;
-    if (chartHandle && renderedStatus === "success" && lastRollingWindows) {
+    if (chartHandle && renderedStatus === "success" && lastDifficultyHistogram) {
       const theme = buildEChartsTheme(readThemeTokensImpl());
-      chartHandle.update(buildWorkerWindowsChartOption(lastRollingWindows, theme));
+      const bucketData = selectHistogramBucketData(lastDifficultyHistogram, currentDataset);
+      chartHandle.update(buildHistogramChartOption(bucketData, lastNetworkDifficulty, theme));
     }
   });
 
@@ -433,7 +429,9 @@ export function unmount() {
   }
   chartCanvasNode = null;
   renderedStatus = null;
-  lastRollingWindows = null;
+  lastDetailState = null;
+  lastDifficultyHistogram = null;
+  lastNetworkDifficulty = null;
   const container = currentContainer;
   const render = currentRender;
   currentContainer = null;

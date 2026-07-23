@@ -4,8 +4,6 @@ import {
   route,
   transformUserDetailData,
   deriveUserDetailState,
-  buildUserWindowsChartOption,
-  buildUserWindowsChartSummary,
   formatWorkerRow,
   buildUserDetailSpec,
   mount,
@@ -14,11 +12,16 @@ import {
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
 import { truncateAddress, truncateWorkername } from "../../src/core/format.js";
+import { BUCKET_COUNT } from "../../src/charts/histogram-chart.js";
+
+function emptyBucketData() {
+  return { bucket_counts: new Array(BUCKET_COUNT).fill(0), bucket_best: new Array(BUCKET_COUNT).fill(null) };
+}
 
 function fullPayload(overrides = {}) {
   return {
-    metadata: { schema_version: "1.1", generated_at: new Date().toISOString(), ...overrides.metadata },
-    pool: {},
+    metadata: { schema_version: "1.3", generated_at: new Date().toISOString(), ...overrides.metadata },
+    pool: { network_difficulty: 127170500429035.2, ...overrides.pool },
     users: {
       alice: {
         accepted_count: 1000,
@@ -26,13 +29,9 @@ function fullPayload(overrides = {}) {
         average_sdiff: 105.5,
         best_share_ever: { username: "alice", workername: "rig1", sdiff: 2048, timestamp: "unknown" },
         workers: ["rig1", "rig2"],
-        rolling_windows: {
-          "15m": { accepted: 10, rejected: 0, average_sdiff: 100, share_frequency_per_minute: 0.5 },
-          "1h": { accepted: 40, rejected: 1, average_sdiff: 120, share_frequency_per_minute: 0.6 },
-          "24h": { accepted: 900, rejected: 4, average_sdiff: 110, share_frequency_per_minute: 0.6 },
-        },
         hashrate_1m: 11200000000000,
         hashrate_24h: 10400000000000,
+        difficulty_histogram: { "1d": emptyBucketData(), total: emptyBucketData() },
         ...overrides.aliceRecord,
       },
       ...overrides.users,
@@ -114,6 +113,18 @@ test("transformUserDetailData", async (t) => {
     const data = transformUserDetailData(fullPayload({ aliceRecord: { hashrate_1m: undefined, hashrate_24h: undefined } }), "alice");
     assert.equal(data.hashrate1m, undefined);
     assert.equal(data.hashrate24h, undefined);
+  });
+
+  await t.test("Phase E Milestone 29: extracts this user's own difficulty_histogram and the pool-wide network_difficulty", () => {
+    const payload = fullPayload();
+    const data = transformUserDetailData(payload, "alice");
+    assert.deepEqual(data.difficultyHistogram, payload.users.alice.difficulty_histogram);
+    assert.equal(data.networkDifficulty, 127170500429035.2);
+  });
+
+  await t.test("a missing difficulty_histogram on this user's record degrades to an empty (all-zero) shape", () => {
+    const data = transformUserDetailData(fullPayload({ aliceRecord: { difficulty_histogram: undefined } }), "alice");
+    assert.ok(data.difficultyHistogram["1d"].bucket_counts.every((c) => c === 0));
   });
 
   await t.test("returns null when the username has no record at all -- the not-found signal", () => {
@@ -232,30 +243,6 @@ test("deriveUserDetailState", async (t) => {
   });
 });
 
-test("buildUserWindowsChartOption / Summary", async (t) => {
-  await t.test("maps the user's own rolling_windows into series data", () => {
-    const data = transformUserDetailData(fullPayload(), "alice");
-    const option = buildUserWindowsChartOption(data.rollingWindows);
-    assert.deepEqual(option.series[0].data, [100, 120, 110]);
-  });
-
-  await t.test("missing windows produce null data points, not a throw", () => {
-    assert.deepEqual(buildUserWindowsChartOption(null).series[0].data, [null, null, null]);
-  });
-
-  await t.test("summary describes every window", () => {
-    const data = transformUserDetailData(fullPayload(), "alice");
-    const summary = buildUserWindowsChartSummary(data.rollingWindows);
-    assert.match(summary, /15 min/);
-    assert.match(summary, /24 hours/);
-  });
-
-  await t.test("uses formatSdiff's full precision, not formatCompactSdiff's abbreviation -- accessible/screen-reader text, not the visible chart (Code Review finding, Phase E Milestone 25)", () => {
-    const summary = buildUserWindowsChartSummary({ "15m": { average_sdiff: 12345.67 } });
-    assert.match(summary, /12,345\.67/, "full comma-separated precision, not a compact abbreviation like \"12.35K\"");
-  });
-});
-
 test("formatWorkerRow", async (t) => {
   await t.test("formats counts and relative time for display, passes isActive through raw", () => {
     const data = transformUserDetailData(fullPayload(), "alice");
@@ -313,7 +300,7 @@ test("buildUserDetailSpec", async (t) => {
     assert.ok(message.text.includes(truncateAddress("nonexistent")));
   });
 
-  await t.test("success renders the back-link, stat tiles (including the daily-improvement trend), the worker table, and the chart", () => {
+  await t.test("success renders the back-link, stat tiles (including the daily-improvement trend), the worker table, and the histogram panel", () => {
     const data = transformUserDetailData(fullPayload(), "alice");
     const spec = buildUserDetailSpec({ status: "success", data, username: "alice", error: null, isStale: false });
 
@@ -331,7 +318,8 @@ test("buildUserDetailSpec", async (t) => {
 
     assert.ok(findByClassName(spec, "split-layout"));
     assert.ok(findByClassName(spec, "data-table"));
-    assert.ok(findByClassName(spec, "chart-panel"));
+    assert.ok(findByClassName(spec, "histogram-panel"));
+    assert.equal(findByClassName(findByClassName(spec, "histogram-panel"), "card__header").text, "User Share Difficulty Histogram");
     assert.equal(findByClassName(spec, "error-banner"), null);
   });
 
@@ -448,8 +436,14 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     return {};
   }
 
+  // Milestone 29's defaultRender contract returns { canvasNode,
+  // toggleButtonNodes } rather than a bare canvas node.
+  function fakeRenderResult(canvasNode = null, toggleButtonNodes = []) {
+    return { canvasNode, toggleButtonNodes };
+  }
+
   await t.test("throws if params.username is missing", () => {
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
     assert.throws(() => mount(fakeContainer(), { fetchImpl, render, params: {} }), /params\.username is required/);
     assert.throws(() => mount(fakeContainer(), { fetchImpl, render }), /params\.username is required/);
@@ -459,7 +453,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -476,7 +470,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
   });
 
   await t.test("throws on a second mount() without an intervening unmount()", () => {
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
     mount(fakeContainer(), { fetchImpl, render, params: { username: "alice" } });
@@ -494,7 +488,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -522,7 +516,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const oldRenders = [];
       const oldRender = (target, spec) => {
         oldRenders.push(spec);
-        return null;
+        return fakeRenderResult();
       };
 
       mount(fakeContainer(), { fetchImpl: oldFetchImpl, render: oldRender, params: { username: "alice" } });
@@ -533,7 +527,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const newRenders = [];
       const newRender = (target, spec) => {
         newRenders.push(spec);
-        return null;
+        return fakeRenderResult();
       };
       const newFetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -551,7 +545,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
   );
 
   await t.test("mount() writes the fetched payload into core/state.js", async () => {
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const payload = fullPayload();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => payload });
 
@@ -565,7 +559,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
   await t.test("unmount() disposes the active chart instance", async () => {
     const disposeCalls = [];
-    const render = () => ({ fakeCanvas: true });
+    const render = () => fakeRenderResult({ fakeCanvas: true });
     const createChartImpl = () => ({
       update() {},
       dispose() {
@@ -592,7 +586,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const disposeCalls = [];
       const updateCalls = [];
       let createCalls = 0;
-      const render = () => ({ fakeCanvas: true });
+      const render = () => fakeRenderResult({ fakeCanvas: true });
       const createChartImpl = () => {
         createCalls += 1;
         return {
@@ -634,7 +628,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
   await t.test("repaints the chart when the active theme changes, but not for an unrelated state.js change", async () => {
     const updateCalls = [];
-    const render = () => ({ fakeCanvas: true });
+    const render = () => fakeRenderResult({ fakeCanvas: true });
     const createChartImpl = () => ({
       update(option) {
         updateCalls.push(option);
@@ -668,7 +662,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     let renderCount = 0;
     const render = () => {
       renderCount += 1;
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
     const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -687,7 +681,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     let renderCount = 0;
     const render = () => {
       renderCount += 1;
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -696,5 +690,44 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.equal(renderCount, 2);
+  });
+
+  // Phase E Milestone 29: the dataset-toggle wiring.
+  await t.test("clicking the 'Total' toggle button switches the active dataset and updates the chart in place", async () => {
+    const updateCalls = [];
+    let toggleButtons = [];
+
+    function fakeButtonNode(datasetKey) {
+      return {
+        listeners: {},
+        getAttribute(name) {
+          return name === "data-dataset" ? datasetKey : null;
+        },
+        addEventListener(type, fn) {
+          this.listeners[type] = fn;
+        },
+      };
+    }
+
+    const render = () => {
+      toggleButtons = [fakeButtonNode("1d"), fakeButtonNode("total")];
+      return fakeRenderResult({ fakeCanvas: true }, toggleButtons);
+    };
+    const createChartImpl = () => ({
+      update(option) {
+        updateCalls.push(option);
+      },
+      dispose() {},
+    });
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
+    const readThemeTokensImpl = () => ({});
+
+    mount(fakeContainer(), { fetchImpl, render, createChartImpl, readThemeTokensImpl, params: { username: "alice" } });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(updateCalls.length, 0);
+    toggleButtons[1].listeners.click();
+    assert.equal(updateCalls.length, 1, "clicking a different dataset must update the existing chart, not recreate it");
   });
 });

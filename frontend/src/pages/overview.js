@@ -17,20 +17,36 @@
 // *orchestration* logic (what gets fetched, when render is called,
 // what gets cleaned up) is itself testable without a DOM emulation
 // dependency, even though mount()/unmount() are not pure.
+//
+// Phase E Milestone 29 (Human Approval Brief): the page's one chart
+// is now the Share Difficulty Distribution Histogram --
+// charts/histogram-chart.js's pure option/summary logic plus
+// components/histogram-panel.js's spec shell, reused byte-identical
+// on user-detail.js/worker-detail.js -- completely replacing the
+// prior "Average Share Difficulty" rolling-windows bar chart, which
+// this page no longer renders at all.
 
 import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatSdiff, formatHashrate, formatRelativeTime } from "../core/format.js";
+import { formatCompactSdiff, formatHashrate, formatRelativeTime } from "../core/format.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
 import { emptyStateSpec } from "../components/empty-state.js";
 import { loadingSkeletonSpec } from "../components/loading-skeleton.js";
 import { errorBannerSpec } from "../components/error-banner.js";
-import { chartPanelSpec } from "../components/chart-panel.js";
+import { histogramPanelSpec } from "../components/histogram-panel.js";
 import { createChart } from "../charts/chart.js";
 import { buildEChartsTheme, readThemeTokens } from "../charts/theme-echarts.js";
+import {
+  DEFAULT_HISTOGRAM_DATASET,
+  emptyHistogramDatasetPair,
+  selectHistogramBucketData,
+  histogramDatasetLabel,
+  buildHistogramChartSummary,
+  buildHistogramChartOption,
+} from "../charts/histogram-chart.js";
 
 const ANALYTICS_ENDPOINT = "/analytics.json";
 
@@ -42,9 +58,6 @@ const ANALYTICS_ENDPOINT = "/analytics.json";
 // the contract, wire it up when the consumer exists" pattern already
 // used for shell.js's #main-content contract).
 export const route = { pattern: "/", name: "overview" };
-
-const WINDOW_ORDER = ["15m", "1h", "24h"];
-const WINDOW_LABELS = { "15m": "15 min", "1h": "1 hour", "24h": "24 hours" };
 
 // -------------------------------------------------------------------
 // Pure data transformation
@@ -63,7 +76,6 @@ export function transformOverviewData(payload) {
     rejectedCount: pool.rejected_count,
     bestShareToday: pool.best_share_today || null,
     bestShareEver: pool.best_share_ever || null,
-    rollingWindows: pool.rolling_windows || {},
     // Phase E Milestone 28: CKPool's own native hashrate figures --
     // read verbatim, never estimated/calculated by this project. null
     // (not 0) when CKPool hasn't yet written a native stats file (a
@@ -71,16 +83,18 @@ export function transformOverviewData(payload) {
     // renders that as an empty placeholder, not a misleading "0".
     hashrate1m: pool.hashrate_1m,
     hashrate24h: pool.hashrate_24h,
+    // Phase E Milestone 29: the pool-wide difficulty histogram (both
+    // datasets) and the current real Bitcoin network difficulty --
+    // both read verbatim from analytics.json, never estimated/
+    // recomputed client-side (Human Approval Brief).
+    difficultyHistogram: pool.difficulty_histogram || emptyHistogramDatasetPair(),
+    networkDifficulty: pool.network_difficulty,
   };
 }
 
 // A genuinely empty pool -- no shares processed at all yet -- rather
 // than a pool with legitimately zero *recent* activity (docs/
 // ARCHITECTURE.md Section 16 point 3: "not a generic 'no data'").
-// rolling_windows is deliberately not part of this check: a pool with
-// real historical shares but zero shares in the last 15 minutes is not
-// empty, it is quiet -- the chart correctly shows that as flat/zero
-// bars rather than the page hiding real information behind EmptyState.
 export function isOverviewEmpty(pool) {
   if (!pool) return true;
   const hasAccepted = Number.isFinite(pool.accepted_count) && pool.accepted_count > 0;
@@ -112,65 +126,6 @@ export function deriveOverviewState({ payload, error = null, isStale = false } =
   const data = transformOverviewData(payload);
   const status = isOverviewEmpty(payload.pool) ? "empty" : "success";
   return { status, data, error, isStale: Boolean(isStale) };
-}
-
-// -------------------------------------------------------------------
-// Pure chart data transformation
-// -------------------------------------------------------------------
-
-export function buildPoolWindowsChartOption(rollingWindows, theme = {}) {
-  const windows = rollingWindows || {};
-  const values = WINDOW_ORDER.map((key) => {
-    const avg = windows[key] && windows[key].average_sdiff;
-    return Number.isFinite(avg) ? avg : null;
-  });
-
-  return {
-    backgroundColor: theme.backgroundColor || "transparent",
-    textStyle: theme.textStyle || {},
-    grid: { left: 56, right: 16, top: 24, bottom: 32, containLabel: true },
-    xAxis: {
-      type: "category",
-      data: WINDOW_ORDER.map((key) => WINDOW_LABELS[key]),
-      axisLine: theme.axisLine || {},
-      axisLabel: theme.axisLabel || {},
-    },
-    yAxis: {
-      type: "value",
-      axisLine: theme.axisLine || {},
-      axisLabel: theme.axisLabel || {},
-      splitLine: theme.splitLine || {},
-    },
-    series: [
-      {
-        type: "bar",
-        data: values,
-        itemStyle: { color: theme.accentColor || undefined },
-        barMaxWidth: 48,
-      },
-    ],
-  };
-}
-
-// Feeds chartPanelSpec's `summary` prop -- the mandatory, visually-
-// hidden but screen-reader-read accessible text (docs/ARCHITECTURE.md
-// Section 17, chart-panel.js's own module comment), not the visible
-// chart itself. Deliberately kept on formatSdiff's full, precise,
-// comma-separated form rather than formatCompactSdiff's abbreviation
-// (Phase E Milestone 25) -- a spoken/read "eighty-two thousand, four
-// hundred ninety-three" is more useful here than "82.49K". This was
-// accidentally switched to formatCompactSdiff in the same milestone's
-// first pass (a blanket find-and-replace caught this function along
-// with the visible stat-tile values below, which correctly did
-// change) and reverted after Code Review caught the inconsistency.
-export function buildPoolWindowsChartSummary(rollingWindows) {
-  const windows = rollingWindows || {};
-  const parts = WINDOW_ORDER.map((key) => {
-    const avg = windows[key] && windows[key].average_sdiff;
-    const formatted = Number.isFinite(avg) ? formatSdiff(avg) : "no data";
-    return `${WINDOW_LABELS[key]}: ${formatted}`;
-  });
-  return `Average share difficulty by window -- ${parts.join(", ")}.`;
 }
 
 // -------------------------------------------------------------------
@@ -210,6 +165,19 @@ function statTilesSectionSpec(data) {
   });
 }
 
+// Phase E Milestone 29: the one histogram section shared, byte-
+// identical logic-wise, with user-detail.js/worker-detail.js -- only
+// the title and the supplied dataset differ per page.
+function histogramSectionSpec(data, histogramDataset) {
+  const bucketData = selectHistogramBucketData(data.difficultyHistogram, histogramDataset);
+  const label = histogramDatasetLabel(histogramDataset);
+  return histogramPanelSpec({
+    title: "Pool Share Difficulty Histogram",
+    summary: buildHistogramChartSummary(bucketData, data.networkDifficulty, label),
+    activeDataset: histogramDataset,
+  });
+}
+
 function loadingSectionSpec() {
   return el("div", {
     className: "overview-page__loading",
@@ -226,6 +194,13 @@ function loadingSectionSpec() {
 // re-show the loading skeleton, which this satisfies structurally
 // (deriveOverviewState never produces "loading", so a poll-driven
 // re-render can never land back on the loading branch below).
+//
+// `state.histogramDataset` ("1d" or "total") is page-local UI
+// selection state supplied by mount()'s DOM glue, the same
+// `{...state, extraUiField}` pattern users.js already established for
+// `searchQuery` -- defaults to DEFAULT_HISTOGRAM_DATASET so a bare
+// `{status: "success", data}` (as used directly in tests) still
+// renders correctly.
 export function buildOverviewSpec(state) {
   const heading = el("h1", { className: "overview-page__title", text: "Overview" });
 
@@ -273,10 +248,7 @@ export function buildOverviewSpec(state) {
       heading,
       ...banners,
       statTilesSectionSpec(state.data),
-      chartPanelSpec({
-        title: "Average Share Difficulty",
-        summary: buildPoolWindowsChartSummary(state.data.rollingWindows),
-      }),
+      histogramSectionSpec(state.data, state.histogramDataset || DEFAULT_HISTOGRAM_DATASET),
     ],
   });
 }
@@ -306,6 +278,11 @@ const EMPTY_PAGE_SPEC = el("div", { className: "overview-page" });
 // latest data, but the one visually-disruptive element (the chart)
 // physically never leaves the DOM across a same-status re-render, so
 // there is nothing for the caller to dispose/recreate.
+//
+// Phase E Milestone 29: the dataset-toggle buttons are always
+// rebuilt/rewired fresh every render (matching users.js's own
+// clear-button precedent) -- unlike the canvas, losing/regaining a
+// plain button across a render carries no state cost.
 function defaultRender(container, spec, { reuseCanvasNode = null } = {}) {
   const node = specToDom(spec);
   const freshCanvasNode = node.querySelector(".chart-panel__canvas");
@@ -315,7 +292,11 @@ function defaultRender(container, spec, { reuseCanvasNode = null } = {}) {
   }
 
   container.replaceChildren(node);
-  return reuseCanvasNode || freshCanvasNode;
+
+  return {
+    canvasNode: reuseCanvasNode || freshCanvasNode,
+    toggleButtonNodes: Array.from(node.querySelectorAll(".dataset-toggle__button")),
+  };
 }
 
 // Module-singleton lifecycle state -- consistent with core/state.js's
@@ -338,7 +319,10 @@ let mountToken = 0;
 let chartHandle = null;
 let chartCanvasNode = null;
 let renderedStatus = null;
-let lastRollingWindows = null;
+let currentDataset = DEFAULT_HISTOGRAM_DATASET;
+let lastOverviewState = null;
+let lastDifficultyHistogram = null;
+let lastNetworkDifficulty = null;
 let lastAppliedTheme = null;
 let stopPollingFn = null;
 let stopThemeSubscription = null;
@@ -366,7 +350,10 @@ export function mount(
   chartHandle = null;
   chartCanvasNode = null;
   renderedStatus = null;
-  lastRollingWindows = null;
+  currentDataset = DEFAULT_HISTOGRAM_DATASET;
+  lastOverviewState = null;
+  lastDifficultyHistogram = null;
+  lastNetworkDifficulty = null;
   stopPollingFn = null;
   stopThemeSubscription = null;
   currentRender = render;
@@ -387,7 +374,21 @@ export function mount(
   const safeStaleAfterMs = Number.isFinite(staleAfterMs) && staleAfterMs > 0 ? staleAfterMs : undefined;
   const fetchOptions = { fetchImpl, validate: validateSchema, staleAfterMs: safeStaleAfterMs };
 
+  function wireToggleButtons(toggleButtonNodes) {
+    for (const button of toggleButtonNodes || []) {
+      button.addEventListener("click", () => {
+        if (!isCurrent()) return;
+        const nextDataset = button.getAttribute("data-dataset");
+        if (!nextDataset || nextDataset === currentDataset) return;
+        currentDataset = nextDataset;
+        if (lastOverviewState) renderState(lastOverviewState);
+      });
+    }
+  }
+
   function renderState(overviewState) {
+    lastOverviewState = overviewState;
+
     const reuseChart =
       renderedStatus === "success" &&
       overviewState.status === "success" &&
@@ -400,16 +401,21 @@ export function mount(
       chartCanvasNode = null;
     }
 
-    const spec = buildOverviewSpec(overviewState);
-    const canvasNode = render(container, spec, {
+    const spec = buildOverviewSpec({ ...overviewState, histogramDataset: currentDataset });
+    const nodes = render(container, spec, {
       reuseCanvasNode: reuseChart ? chartCanvasNode : null,
     });
+    const canvasNode = nodes && nodes.canvasNode;
     renderedStatus = overviewState.status;
 
+    wireToggleButtons(nodes && nodes.toggleButtonNodes);
+
     if (canvasNode && overviewState.status === "success") {
-      lastRollingWindows = overviewState.data.rollingWindows;
+      lastDifficultyHistogram = overviewState.data.difficultyHistogram;
+      lastNetworkDifficulty = overviewState.data.networkDifficulty;
       const theme = buildEChartsTheme(readThemeTokensImpl());
-      const option = buildPoolWindowsChartOption(lastRollingWindows, theme);
+      const bucketData = selectHistogramBucketData(lastDifficultyHistogram, currentDataset);
+      const option = buildHistogramChartOption(bucketData, lastNetworkDifficulty, theme);
       if (reuseChart) {
         chartHandle.update(option);
       } else {
@@ -445,9 +451,10 @@ export function mount(
     // currently showing.
     if (appState.theme === lastAppliedTheme) return;
     lastAppliedTheme = appState.theme;
-    if (chartHandle && renderedStatus === "success" && lastRollingWindows) {
+    if (chartHandle && renderedStatus === "success" && lastDifficultyHistogram) {
       const theme = buildEChartsTheme(readThemeTokensImpl());
-      chartHandle.update(buildPoolWindowsChartOption(lastRollingWindows, theme));
+      const bucketData = selectHistogramBucketData(lastDifficultyHistogram, currentDataset);
+      chartHandle.update(buildHistogramChartOption(bucketData, lastNetworkDifficulty, theme));
     }
   });
 
@@ -496,7 +503,9 @@ export function unmount() {
   }
   chartCanvasNode = null;
   renderedStatus = null;
-  lastRollingWindows = null;
+  lastOverviewState = null;
+  lastDifficultyHistogram = null;
+  lastNetworkDifficulty = null;
   currentRender(currentContainer, EMPTY_PAGE_SPEC);
   currentContainer = null;
 }

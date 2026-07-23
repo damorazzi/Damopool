@@ -4,8 +4,6 @@ import {
   route,
   transformWorkerDetailData,
   deriveWorkerDetailState,
-  buildWorkerWindowsChartOption,
-  buildWorkerWindowsChartSummary,
   buildWorkerDetailSpec,
   mount,
   unmount,
@@ -13,11 +11,16 @@ import {
 import { getState, setState } from "../../src/core/state.js";
 import { FetchApiError } from "../../src/core/api.js";
 import { truncateWorkername } from "../../src/core/format.js";
+import { BUCKET_COUNT } from "../../src/charts/histogram-chart.js";
+
+function emptyBucketData() {
+  return { bucket_counts: new Array(BUCKET_COUNT).fill(0), bucket_best: new Array(BUCKET_COUNT).fill(null) };
+}
 
 function fullPayload(overrides = {}) {
   return {
-    metadata: { schema_version: "1.1", generated_at: new Date().toISOString(), ...overrides.metadata },
-    pool: {},
+    metadata: { schema_version: "1.3", generated_at: new Date().toISOString(), ...overrides.metadata },
+    pool: { network_difficulty: 127170500429035.2, ...overrides.pool },
     users: {},
     workers: {
       rig1: {
@@ -34,13 +37,9 @@ function fullPayload(overrides = {}) {
         max_sdiff: 2048,
         best_share_today: { username: "alice", workername: "rig1", sdiff: 512.5, timestamp: "unknown" },
         best_share_ever: { username: "alice", workername: "rig1", sdiff: 2048, timestamp: "unknown" },
-        rolling_windows: {
-          "15m": { accepted: 10, rejected: 0, average_sdiff: 100, share_frequency_per_minute: 0.5 },
-          "1h": { accepted: 40, rejected: 1, average_sdiff: 120, share_frequency_per_minute: 0.6 },
-          "24h": { accepted: 900, rejected: 4, average_sdiff: 110, share_frequency_per_minute: 0.6 },
-        },
         hashrate_1m: 5000000000000,
         hashrate_24h: 6000000000000,
+        difficulty_histogram: { "1d": emptyBucketData(), total: emptyBucketData() },
         ...overrides.rig1Record,
       },
       ...overrides.workers,
@@ -100,13 +99,24 @@ test("transformWorkerDetailData", async (t) => {
     assert.equal(data.hashrate24h, undefined);
   });
 
+  await t.test("Phase E Milestone 29: extracts this worker's own difficulty_histogram and the pool-wide network_difficulty", () => {
+    const payload = fullPayload();
+    const data = transformWorkerDetailData(payload, "rig1");
+    assert.deepEqual(data.difficultyHistogram, payload.workers.rig1.difficulty_histogram);
+    assert.equal(data.networkDifficulty, 127170500429035.2);
+  });
+
+  await t.test("a missing difficulty_histogram on this worker's record degrades to an empty (all-zero) shape", () => {
+    const data = transformWorkerDetailData(fullPayload({ rig1Record: { difficulty_histogram: undefined } }), "rig1");
+    assert.ok(data.difficultyHistogram["1d"].bucket_counts.every((c) => c === 0));
+  });
+
   await t.test("degrades gracefully when fields are missing", () => {
     const data = transformWorkerDetailData({ metadata: {}, workers: { rig1: {} } }, "rig1");
     assert.equal(data.agent, null);
     assert.equal(data.isActive, false);
     assert.equal(data.firstShareAt, null);
     assert.equal(data.bestShareToday, null);
-    assert.deepEqual(data.rollingWindows, {});
   });
 
   await t.test("a workername matching an Object.prototype member name is correctly not-found, not a phantom record", () => {
@@ -160,30 +170,6 @@ test("deriveWorkerDetailState", async (t) => {
   });
 });
 
-test("buildWorkerWindowsChartOption / Summary", async (t) => {
-  await t.test("maps the worker's own rolling_windows into series data", () => {
-    const data = transformWorkerDetailData(fullPayload(), "rig1");
-    const option = buildWorkerWindowsChartOption(data.rollingWindows);
-    assert.deepEqual(option.series[0].data, [100, 120, 110]);
-  });
-
-  await t.test("missing windows produce null data points, not a throw", () => {
-    assert.deepEqual(buildWorkerWindowsChartOption(null).series[0].data, [null, null, null]);
-  });
-
-  await t.test("summary describes every window", () => {
-    const data = transformWorkerDetailData(fullPayload(), "rig1");
-    const summary = buildWorkerWindowsChartSummary(data.rollingWindows);
-    assert.match(summary, /15 min/);
-    assert.match(summary, /24 hours/);
-  });
-
-  await t.test("uses formatSdiff's full precision, not formatCompactSdiff's abbreviation -- accessible/screen-reader text, not the visible chart (Code Review finding, Phase E Milestone 25)", () => {
-    const summary = buildWorkerWindowsChartSummary({ "15m": { average_sdiff: 12345.67 } });
-    assert.match(summary, /12,345\.67/, "full comma-separated precision, not a compact abbreviation like \"12.35K\"");
-  });
-});
-
 test("buildWorkerDetailSpec", async (t) => {
   await t.test("loading state shows the header (with workername) and skeletons, no real chart", () => {
     const spec = buildWorkerDetailSpec({ status: "loading", workername: "rig1" });
@@ -226,7 +212,7 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.ok(message.text.includes(truncateWorkername("nonexistent")));
   });
 
-  await t.test("success renders the back-link, all 15 stat tiles, and the chart -- no DataTable/split-layout", () => {
+  await t.test("success renders the back-link, all 15 stat tiles, and the histogram panel -- no DataTable/split-layout", () => {
     const data = transformWorkerDetailData(fullPayload(), "rig1");
     const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
 
@@ -236,7 +222,11 @@ test("buildWorkerDetailSpec", async (t) => {
     const tileGrid = findByClassName(spec, "tile-grid");
     assert.equal(tileGrid.children.length, 15);
 
-    assert.ok(findByClassName(spec, "chart-panel"));
+    assert.ok(findByClassName(spec, "histogram-panel"));
+    assert.equal(
+      findByClassName(findByClassName(spec, "histogram-panel"), "card__header").text,
+      "Worker Share Difficulty Histogram",
+    );
     assert.equal(findByClassName(spec, "data-table"), null, "worker-detail.js has no DataTable per Section 5");
     assert.equal(findByClassName(spec, "split-layout"), null, "worker-detail.js has no split-layout per Section 5");
     assert.equal(findByClassName(spec, "error-banner"), null);
@@ -314,8 +304,14 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     return {};
   }
 
+  // Milestone 29's defaultRender contract returns { canvasNode,
+  // toggleButtonNodes } rather than a bare canvas node.
+  function fakeRenderResult(canvasNode = null, toggleButtonNodes = []) {
+    return { canvasNode, toggleButtonNodes };
+  }
+
   await t.test("throws if params.workername is missing", () => {
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
     assert.throws(() => mount(fakeContainer(), { fetchImpl, render, params: {} }), /params\.workername is required/);
     assert.throws(() => mount(fakeContainer(), { fetchImpl, render }), /params\.workername is required/);
@@ -325,7 +321,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -342,7 +338,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
   });
 
   await t.test("throws on a second mount() without an intervening unmount()", () => {
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
     mount(fakeContainer(), { fetchImpl, render, params: { workername: "rig1" } });
@@ -360,7 +356,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     const renders = [];
     const render = (target, spec) => {
       renders.push(spec);
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -388,7 +384,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const oldRenders = [];
       const oldRender = (target, spec) => {
         oldRenders.push(spec);
-        return null;
+        return fakeRenderResult();
       };
 
       mount(fakeContainer(), { fetchImpl: oldFetchImpl, render: oldRender, params: { workername: "rig1" } });
@@ -399,7 +395,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const newRenders = [];
       const newRender = (target, spec) => {
         newRenders.push(spec);
-        return null;
+        return fakeRenderResult();
       };
       const newFetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -417,7 +413,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
   );
 
   await t.test("mount() writes the fetched payload into core/state.js", async () => {
-    const render = () => null;
+    const render = () => fakeRenderResult();
     const payload = fullPayload();
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => payload });
 
@@ -431,7 +427,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
   await t.test("unmount() disposes the active chart instance", async () => {
     const disposeCalls = [];
-    const render = () => ({ fakeCanvas: true });
+    const render = () => fakeRenderResult({ fakeCanvas: true });
     const createChartImpl = () => ({
       update() {},
       dispose() {
@@ -458,7 +454,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
       const disposeCalls = [];
       const updateCalls = [];
       let createCalls = 0;
-      const render = () => ({ fakeCanvas: true });
+      const render = () => fakeRenderResult({ fakeCanvas: true });
       const createChartImpl = () => {
         createCalls += 1;
         return {
@@ -500,7 +496,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
 
   await t.test("repaints the chart when the active theme changes, but not for an unrelated state.js change", async () => {
     const updateCalls = [];
-    const render = () => ({ fakeCanvas: true });
+    const render = () => fakeRenderResult({ fakeCanvas: true });
     const createChartImpl = () => ({
       update(option) {
         updateCalls.push(option);
@@ -534,7 +530,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     let renderCount = 0;
     const render = () => {
       renderCount += 1;
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
     const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -553,7 +549,7 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     let renderCount = 0;
     const render = () => {
       renderCount += 1;
-      return null;
+      return fakeRenderResult();
     };
     const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
 
@@ -562,5 +558,44 @@ test("mount/unmount lifecycle (no DOM emulation)", async (t) => {
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.equal(renderCount, 2);
+  });
+
+  // Phase E Milestone 29: the dataset-toggle wiring.
+  await t.test("clicking the 'Total' toggle button switches the active dataset and updates the chart in place", async () => {
+    const updateCalls = [];
+    let toggleButtons = [];
+
+    function fakeButtonNode(datasetKey) {
+      return {
+        listeners: {},
+        getAttribute(name) {
+          return name === "data-dataset" ? datasetKey : null;
+        },
+        addEventListener(type, fn) {
+          this.listeners[type] = fn;
+        },
+      };
+    }
+
+    const render = () => {
+      toggleButtons = [fakeButtonNode("1d"), fakeButtonNode("total")];
+      return fakeRenderResult({ fakeCanvas: true }, toggleButtons);
+    };
+    const createChartImpl = () => ({
+      update(option) {
+        updateCalls.push(option);
+      },
+      dispose() {},
+    });
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => fullPayload() });
+    const readThemeTokensImpl = () => ({});
+
+    mount(fakeContainer(), { fetchImpl, render, createChartImpl, readThemeTokensImpl, params: { workername: "rig1" } });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(updateCalls.length, 0);
+    toggleButtons[1].listeners.click();
+    assert.equal(updateCalls.length, 1, "clicking a different dataset must update the existing chart, not recreate it");
   });
 });

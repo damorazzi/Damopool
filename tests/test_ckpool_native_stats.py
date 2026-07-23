@@ -253,5 +253,145 @@ class TestEndToEnd(TempLogsDirMixin, unittest.TestCase):
         json.dumps(result)  # must be JSON-serializable
 
 
+# ---------------------------------------------------------------------------
+# read_network_difficulty (Phase E Milestone 29)
+# ---------------------------------------------------------------------------
+class TestReadNetworkDifficulty(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="damopool_netdifftest_")
+        self.state_path = os.path.join(self.tmpdir, "network_diff.state.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def write_log(self, lines):
+        path = os.path.join(self.tmpdir, "ckpool.log")
+        with open(path, "w") as f:
+            for line in lines:
+                f.write(line + "\n")
+        return path
+
+    def test_reads_the_most_recent_network_diff_line(self):
+        self.write_log([
+            "[2026-07-14 23:28:00.690] Network diff set to 127170500429035.2",
+            "[2026-07-19 18:28:17.058] Network diff set to 130000000000000.0",
+        ])
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(value, 130000000000000.0, delta=1)
+
+    def test_missing_ckpool_log_degrades_to_none_not_a_throw(self):
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertIsNone(value)
+
+    def test_no_matching_line_at_all_degrades_to_none(self):
+        self.write_log(["[2026-07-14 23:28:00.690] Some unrelated log line"])
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertIsNone(value)
+
+    def test_incremental_second_run_only_scans_new_bytes_and_updates_on_change(self):
+        self.write_log(["[2026-07-14 23:28:00.690] Network diff set to 127170500429035.2"])
+        first = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(first, 127170500429035.2, delta=1)
+
+        # Append a new line with a changed value -- simulates a real
+        # difficulty adjustment appearing later in the live-growing log.
+        with open(os.path.join(self.tmpdir, "ckpool.log"), "a") as f:
+            f.write("[2026-07-28 00:00:00.000] Network diff set to 140000000000000.0\n")
+        second = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(second, 140000000000000.0, delta=1)
+
+    def test_second_run_with_no_new_matching_lines_keeps_the_cached_value(self):
+        self.write_log(["[2026-07-14 23:28:00.690] Network diff set to 127170500429035.2"])
+        first = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        with open(os.path.join(self.tmpdir, "ckpool.log"), "a") as f:
+            f.write("[2026-07-15 00:00:00.000] Some other unrelated line\n")
+        second = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertEqual(first, second)
+
+    def test_a_trailing_partial_line_is_not_consumed_and_is_reread_next_run(self):
+        path = os.path.join(self.tmpdir, "ckpool.log")
+        with open(path, "w") as f:
+            f.write("[2026-07-14 23:28:00.690] Network diff set to 100000000000000.0\n")
+            f.write("[2026-07-19 00:00:00.000] Network diff set to 20000")  # no trailing newline -- incomplete
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(value, 100000000000000.0, delta=1)
+        # Complete the line and re-run -- the previously-partial line
+        # must now be picked up, not permanently skipped.
+        with open(path, "a") as f:
+            f.write("0000000000.0\n")
+        value2 = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(value2, 200000000000000.0, delta=1)
+
+    def test_file_shrinking_since_last_check_resets_and_rescans(self):
+        self.write_log([
+            "[2026-07-14 23:28:00.690] Network diff set to 100000000000000.0",
+            "[2026-07-19 00:00:00.000] Network diff set to 110000000000000.0",
+        ])
+        cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        # Simulate rotation: a new, smaller file replaces the old one.
+        self.write_log(["[2026-07-28 00:00:00.000] Network diff set to 130000000000000.0"])
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(value, 130000000000000.0, delta=1)
+
+    def test_malformed_state_file_degrades_gracefully_not_a_throw(self):
+        with open(self.state_path, "w") as f:
+            f.write("not valid json {{{")
+        self.write_log(["[2026-07-14 23:28:00.690] Network diff set to 127170500429035.2"])
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(value, 127170500429035.2, delta=1)
+
+    def test_empty_ckpool_log_degrades_to_none_not_a_throw(self):
+        self.write_log([])
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertIsNone(value)
+
+    # Code Review finding (Milestone 29, final pass): float() on an
+    # arbitrarily long all-digit string (NETWORK_DIFF_PATTERN's own
+    # [\d.]+ guarantees no exponent notation, but not a bounded length)
+    # can silently overflow to inf with no exception -- json.dump would
+    # then emit the non-standard "Infinity" token into analytics.json,
+    # which a strict/browser JSON.parse rejects outright. Mirrors
+    # _parse_hashrate_string's own already-tested overflow guard
+    # (Milestone 28).
+    def test_an_overflowing_digit_string_is_discarded_not_cached_as_infinity(self):
+        self.write_log([f"[2026-07-14 23:28:00.690] Network diff set to {'9' * 320}.0"])
+        value = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertIsNone(value, "an overflowing match must never be accepted as a cached value")
+
+    def test_an_overflowing_line_does_not_clobber_a_previously_cached_good_value(self):
+        self.write_log(["[2026-07-14 23:28:00.690] Network diff set to 127170500429035.2"])
+        first = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertAlmostEqual(first, 127170500429035.2, delta=1)
+
+        with open(os.path.join(self.tmpdir, "ckpool.log"), "a") as f:
+            f.write(f"[2026-07-28 00:00:00.000] Network diff set to {'9' * 320}.0\n")
+        second = cns.read_network_difficulty(self.tmpdir, state_path=self.state_path)
+        self.assertEqual(second, first, "an overflowing new line must keep the last genuine cached value, not None or inf")
+
+    def test_returned_value_is_never_nan_or_infinite_across_a_sweep_of_real_and_adversarial_lines(self):
+        candidates = [
+            "127170500429035.2",
+            "0",
+            "0.0",
+            "1",
+            f"{'9' * 320}.0",
+            f"{'1' * 400}",
+        ]
+        for text in candidates:
+            with self.subTest(text=text):
+                tmpdir = tempfile.mkdtemp(prefix="damopool_netdiff_sweep_")
+                try:
+                    state_path = os.path.join(tmpdir, "network_diff.state.json")
+                    with open(os.path.join(tmpdir, "ckpool.log"), "w") as f:
+                        f.write(f"[2026-07-14 23:28:00.690] Network diff set to {text}\n")
+                    value = cns.read_network_difficulty(tmpdir, state_path=state_path)
+                    if value is not None:
+                        self.assertEqual(value, value, f"{text!r} produced NaN")
+                        self.assertNotIn(value, (float("inf"), float("-inf")), f"{text!r} produced +/-inf")
+                        json.dumps({"network_difficulty": value})  # must be strict-JSON-serializable
+                finally:
+                    shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
