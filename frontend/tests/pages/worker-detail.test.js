@@ -19,7 +19,7 @@ function emptyBucketData() {
 
 function fullPayload(overrides = {}) {
   return {
-    metadata: { schema_version: "1.4", generated_at: new Date().toISOString(), ...overrides.metadata },
+    metadata: { schema_version: "1.5", generated_at: new Date().toISOString(), ...overrides.metadata },
     pool: { network_difficulty: 127170500429035.2, ...overrides.pool },
     users: {},
     workers: {
@@ -46,6 +46,9 @@ function fullPayload(overrides = {}) {
           progress_percent: 0.0227,
           still_needed_multiplier: 4406,
         },
+        session_accepted_count: 42,
+        session_rejected_count: 1,
+        session_started_at: "2026-07-23T14:32:00+00:00",
         ...overrides.rig1Record,
       },
       ...overrides.workers,
@@ -141,6 +144,18 @@ test("transformWorkerDetailData", async (t) => {
       progress_percent: null,
       still_needed_multiplier: null,
     });
+  });
+
+  await t.test("Phase E Milestone 31: extracts session_accepted_count/session_rejected_count/session_started_at verbatim", () => {
+    const data = transformWorkerDetailData(fullPayload(), "rig1");
+    assert.equal(data.sessionAcceptedCount, 42);
+    assert.equal(data.sessionRejectedCount, 1);
+    assert.equal(data.sessionStartedAt, "2026-07-23T14:32:00+00:00");
+  });
+
+  await t.test("a missing session_started_at degrades to null, not a throw", () => {
+    const data = transformWorkerDetailData(fullPayload({ rig1Record: { session_started_at: undefined } }), "rig1");
+    assert.equal(data.sessionStartedAt, null);
   });
 
   await t.test("degrades gracefully when fields are missing", () => {
@@ -244,7 +259,7 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.ok(message.text.includes(truncateWorkername("nonexistent")));
   });
 
-  await t.test("success renders the back-link, all 15 stat tiles, and the histogram panel -- no DataTable/split-layout", () => {
+  await t.test("success renders the back-link, all 17 stat tiles, and the histogram panel -- no DataTable/split-layout", () => {
     const data = transformWorkerDetailData(fullPayload(), "rig1");
     const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
 
@@ -252,7 +267,7 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.equal(backLink.attrs.href, "#/workers");
 
     const tileGrid = findByClassName(spec, "tile-grid");
-    assert.equal(tileGrid.children.length, 15);
+    assert.equal(tileGrid.children.length, 17, "15 existing tiles + Session Accepted + Session Rejected (Milestone 31)");
 
     assert.ok(findByClassName(spec, "histogram-panel"));
     assert.equal(
@@ -279,6 +294,37 @@ test("buildWorkerDetailSpec", async (t) => {
     assert.equal(values[1], "28.6G");
     assert.equal(values[2], "0.0227%");
     assert.equal(values[3], "×4,406");
+  });
+
+  await t.test("Phase E Milestone 31: renders 'Session Accepted'/'Session Rejected' tiles alongside the existing lifetime tiles", () => {
+    const data = transformWorkerDetailData(fullPayload(), "rig1");
+    const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
+    const tileGrid = findByClassName(spec, "tile-grid");
+    const labels = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__label").text);
+    const values = tileGrid.children.map((tile) => findByClassName(tile, "stat-tile__value").text);
+    assert.ok(labels.includes("Accepted Shares"), "the existing lifetime tile must still be present, not replaced");
+    assert.ok(labels.includes("Rejected Shares"), "the existing lifetime tile must still be present, not replaced");
+    assert.equal(values[labels.indexOf("Accepted Shares")], "500", "lifetime value must be unaffected");
+    assert.equal(values[labels.indexOf("Session Accepted")], "42");
+    assert.equal(values[labels.indexOf("Session Rejected")], "1");
+  });
+
+  await t.test("Phase E Milestone 31: shows 'Current session since HH:MM' as supporting context, not a separate tile", () => {
+    const data = transformWorkerDetailData(fullPayload(), "rig1");
+    const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
+    const caption = findByClassName(spec, "worker-detail-page__session-caption");
+    assert.ok(caption, "expected a session-since caption");
+    const expectedTime = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })
+      .format(new Date("2026-07-23T14:32:00+00:00"));
+    assert.equal(caption.text, `Current session since ${expectedTime}`);
+    // Confirmed NOT a stat-tile -- it must not be counted among the tile-grid's own tiles.
+    assert.ok(!findAllByClassName(spec, "stat-tile").includes(caption));
+  });
+
+  await t.test("Phase E Milestone 31: no session-since caption when session_started_at is null (never a worker who has never connected)", () => {
+    const data = transformWorkerDetailData(fullPayload({ rig1Record: { session_started_at: null } }), "rig1");
+    const spec = buildWorkerDetailSpec({ status: "success", data, workername: "rig1", error: null, isStale: false });
+    assert.equal(findByClassName(spec, "worker-detail-page__session-caption"), null);
   });
 
   await t.test("Phase E Milestone 28: Worker Hashrate (1m)/(24h) tiles render with compact-formatted values", () => {

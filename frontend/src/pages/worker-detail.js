@@ -24,7 +24,7 @@ import { el, specToDom } from "../core/dom.js";
 import { fetchEndpoint, startPolling } from "../core/api.js";
 import { validateSchema, describeFetchError } from "../core/errors.js";
 import { getState, setState, subscribe } from "../core/state.js";
-import { formatCompactSdiff, formatHashrate, formatProgressPercent, formatStillNeededMultiplier, formatRelativeTime, truncateWorkername } from "../core/format.js";
+import { formatCompactSdiff, formatHashrate, formatProgressPercent, formatStillNeededMultiplier, formatRelativeTime, formatTimestamp, truncateWorkername } from "../core/format.js";
 import { buildHash } from "../core/router.js";
 import { cardSpec } from "../components/card.js";
 import { statTileSpec } from "../components/stat-tile.js";
@@ -97,6 +97,14 @@ export function transformWorkerDetailData(payload, workername) {
     // payload.pool is needed; this worker's own block_progress already
     // includes the current pool-wide network_difficulty).
     blockProgress: record.block_progress || emptyBlockProgress(),
+    // Phase E Milestone 31: this worker's own CURRENT CONNECTION SESSION
+    // accepted/rejected counts -- additive alongside (never replacing)
+    // acceptedCount/rejectedCount above, which remain lifetime totals.
+    // Worker-scope only, per the approved brief -- no pool/user
+    // equivalent exists.
+    sessionAcceptedCount: record.session_accepted_count,
+    sessionRejectedCount: record.session_rejected_count,
+    sessionStartedAt: record.session_started_at || null,
   };
 }
 
@@ -150,6 +158,11 @@ function statTilesSectionSpec(data) {
       statTileSpec({ label: "Last Share", value: formatRelativeTime(data.lastShareAt) }),
       statTileSpec({ label: "Accepted Shares", value: formatCount(data.acceptedCount) }),
       statTileSpec({ label: "Rejected Shares", value: formatCount(data.rejectedCount) }),
+      // Phase E Milestone 31: additive, alongside (never replacing) the
+      // lifetime Accepted/Rejected Shares tiles above -- current
+      // connection session only, per the approved brief.
+      statTileSpec({ label: "Session Accepted", value: formatCount(data.sessionAcceptedCount) }),
+      statTileSpec({ label: "Session Rejected", value: formatCount(data.sessionRejectedCount) }),
       statTileSpec({ label: "Invalid Result Count", value: formatCount(data.invalidResultCount) }),
       statTileSpec({ label: "Average Sdiff", value: formatCompactSdiff(data.averageSdiff) }),
       statTileSpec({ label: "Median Sdiff", value: formatCompactSdiff(data.medianSdiff) }),
@@ -167,6 +180,18 @@ function statTilesSectionSpec(data) {
       statTileSpec({ label: "Worker Hashrate (24h)", value: formatHashrate(data.hashrate24h) }),
     ],
   });
+}
+
+// Phase E Milestone 31: session_started_at shown as small supporting
+// context under the stat tiles, per the approved brief -- explicitly
+// NOT a separate tile of its own. Reuses stat-tile.css's own
+// .stat-tile__label rule (small, --color-text-secondary) rather than
+// introducing new CSS, since that's exactly the muted-caption look
+// this needs and stat-tile.js itself stays unmodified.
+function sessionCaptionSpec(data) {
+  const since = formatTimestamp(data.sessionStartedAt);
+  if (!since) return null;
+  return el("p", { className: "worker-detail-page__session-caption stat-tile__label", text: `Current session since ${since}` });
 }
 
 // Phase E Milestone 29: the one histogram section shared, byte-
@@ -198,7 +223,7 @@ function loadingSectionSpec() {
   return el("div", {
     className: "worker-detail-page__loading",
     children: [
-      loadingSkeletonSpec({ shape: "tile", count: 15, className: "tile-grid" }),
+      loadingSkeletonSpec({ shape: "tile", count: 17, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "tile", count: 4, className: "tile-grid" }),
       loadingSkeletonSpec({ shape: "block", height: 320 }),
     ],
@@ -247,12 +272,15 @@ export function buildWorkerDetailSpec(state) {
     throw new Error(`buildWorkerDetailSpec: unrecognized status "${state.status}"`);
   }
 
+  const sessionCaption = sessionCaptionSpec(state.data);
+
   return el("div", {
     className: "worker-detail-page",
     children: [
       headerSpec(state.workername),
       ...banners,
       statTilesSectionSpec(state.data),
+      ...(sessionCaption ? [sessionCaption] : []),
       blockProgressSectionSpec(state.data),
       histogramSectionSpec(state.data, state.histogramDataset || DEFAULT_HISTOGRAM_DATASET),
     ],

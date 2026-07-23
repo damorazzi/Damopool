@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import ckpool_native_stats as cns
 import analytics_builder as ab
 import histogram_builder
+import worker_sessions
 
 
 class TempLogsDirMixin:
@@ -46,12 +47,15 @@ class TempLogsDirMixin:
 
         self._orig_histogram_state_path = histogram_builder.STATE_PATH
         self._orig_network_diff_state_path = cns.NETWORK_DIFF_STATE_PATH
+        self._orig_worker_sessions_state_path = worker_sessions.STATE_PATH
         histogram_builder.STATE_PATH = os.path.join(self.tmpdir, "histogram.state.json")
         cns.NETWORK_DIFF_STATE_PATH = os.path.join(self.tmpdir, "network_diff.state.json")
+        worker_sessions.STATE_PATH = os.path.join(self.tmpdir, "worker_sessions.state.json")
 
     def tearDown(self):
         histogram_builder.STATE_PATH = self._orig_histogram_state_path
         cns.NETWORK_DIFF_STATE_PATH = self._orig_network_diff_state_path
+        worker_sessions.STATE_PATH = self._orig_worker_sessions_state_path
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def pool_status_path(self):

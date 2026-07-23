@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import analytics_builder as ab
 import histogram_builder
 import ckpool_native_stats
+import worker_sessions
 
 
 def make_share(username="u1", workername="u1.w1", agent="agent", diff=1,
@@ -61,12 +62,15 @@ class TempLogDirMixin:
         self.state_path = os.path.join(self.tmpdir, "analytics.state.json")
         self._orig_histogram_state_path = histogram_builder.STATE_PATH
         self._orig_network_diff_state_path = ckpool_native_stats.NETWORK_DIFF_STATE_PATH
+        self._orig_worker_sessions_state_path = worker_sessions.STATE_PATH
         histogram_builder.STATE_PATH = os.path.join(self.tmpdir, "histogram.state.json")
         ckpool_native_stats.NETWORK_DIFF_STATE_PATH = os.path.join(self.tmpdir, "network_diff.state.json")
+        worker_sessions.STATE_PATH = os.path.join(self.tmpdir, "worker_sessions.state.json")
 
     def tearDown(self):
         histogram_builder.STATE_PATH = self._orig_histogram_state_path
         ckpool_native_stats.NETWORK_DIFF_STATE_PATH = self._orig_network_diff_state_path
+        worker_sessions.STATE_PATH = self._orig_worker_sessions_state_path
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def write_share_lines(self, name, shares):

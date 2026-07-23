@@ -424,6 +424,16 @@ is this same component at `--font-size-3xl` rather than a separate,
 uncovered treatment — the larger size is Section 5's landing-headline-only
 exception, not a different component.
 
+Phase E Milestone 31 (Worker Session Accepted/Rejected Counts) added
+"Session Accepted"/"Session Rejected" tiles alongside (never replacing)
+Worker Detail's existing lifetime "Accepted Shares"/"Rejected Shares"
+tiles — plain `statTileSpec` instances, no new variant. The current
+session's start time is shown as small supporting text below the tile
+grid ("Current session since HH:MM"), reusing this component's own
+`.stat-tile__label` rule (small, `--color-text-secondary`) directly
+rather than introducing new CSS — a Human-approved constraint: this
+context "is not a separate large tile solely for the timestamp."
+
 ### 10.6 Chart Panels
 
 A card (Section 10.3) wrapping an ECharts instance

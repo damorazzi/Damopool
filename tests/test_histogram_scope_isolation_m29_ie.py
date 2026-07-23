@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import histogram_builder as hb
 import analytics_builder as ab
+import worker_sessions
 
 
 def make_share(username="u1", workername="u1.w1", sdiff=1.5, result=True, createdate="1700000000,123456789"):
@@ -175,12 +176,14 @@ class TestEmptyUserOrWorkerNeverSolvedYieldsAllZeroShape(TempLogDirMixin, unitte
         ])
         analytics_state_path = os.path.join(self.tmpdir, "analytics.state.json")
         network_diff_state_path = os.path.join(self.tmpdir, "network_diff.state.json")
+        worker_sessions_state_path = os.path.join(self.tmpdir, "worker_sessions.state.json")
         data = ab.build_analytics(
             logs_dir=self.tmpdir,
             now=now,
             state_path=analytics_state_path,
             histogram_state_path=self.state_path,
             network_diff_state_path=network_diff_state_path,
+            worker_sessions_state_path=worker_sessions_state_path,
         )
         self.assertIn("dave", data["users"])
         histogram = data["users"]["dave"]["difficulty_histogram"]
@@ -198,12 +201,14 @@ class TestEmptyUserOrWorkerNeverSolvedYieldsAllZeroShape(TempLogDirMixin, unitte
         ])
         analytics_state_path = os.path.join(self.tmpdir, "analytics.state.json")
         network_diff_state_path = os.path.join(self.tmpdir, "network_diff.state.json")
+        worker_sessions_state_path = os.path.join(self.tmpdir, "worker_sessions.state.json")
         data = ab.build_analytics(
             logs_dir=self.tmpdir,
             now=now,
             state_path=analytics_state_path,
             histogram_state_path=self.state_path,
             network_diff_state_path=network_diff_state_path,
+            worker_sessions_state_path=worker_sessions_state_path,
         )
         self.assertIn("dave.rig1", data["workers"])
         histogram = data["workers"]["dave.rig1"]["difficulty_histogram"]
@@ -215,12 +220,14 @@ class TestEmptyUserOrWorkerNeverSolvedYieldsAllZeroShape(TempLogDirMixin, unitte
         now = datetime(2026, 7, 22, 12, 0, 0, tzinfo=timezone.utc)
         analytics_state_path = os.path.join(self.tmpdir, "analytics.state.json")
         network_diff_state_path = os.path.join(self.tmpdir, "network_diff.state.json")
+        worker_sessions_state_path = os.path.join(self.tmpdir, "worker_sessions.state.json")
         data = ab.build_analytics(
             logs_dir=self.tmpdir,
             now=now,
             state_path=analytics_state_path,
             histogram_state_path=self.state_path,
             network_diff_state_path=network_diff_state_path,
+            worker_sessions_state_path=worker_sessions_state_path,
         )
         histogram = data["pool"]["difficulty_histogram"]
         self.assertEqual(set(histogram.keys()), {"1d", "total"})

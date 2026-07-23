@@ -24,10 +24,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import analytics_builder as ab
 import histogram_builder
 import ckpool_native_stats
+import worker_sessions
 
 
 def make_share(username="u1", workername="u1.w1", agent="agent", diff=1,
-                sdiff=1.5, result=True, createdate="1700000000,123456789"):
+                sdiff=1.5, result=True, createdate="1700000000,123456789",
+                enonce1="e1", clientid=1):
     return {
         "username": username,
         "workername": workername,
@@ -36,6 +38,8 @@ def make_share(username="u1", workername="u1.w1", agent="agent", diff=1,
         "sdiff": sdiff,
         "result": result,
         "createdate": createdate,
+        "enonce1": enonce1,
+        "clientid": clientid,
     }
 
 
@@ -68,12 +72,15 @@ class TempLogDirMixin:
         # wrong by missing just one.
         self._orig_histogram_state_path = histogram_builder.STATE_PATH
         self._orig_network_diff_state_path = ckpool_native_stats.NETWORK_DIFF_STATE_PATH
+        self._orig_worker_sessions_state_path = worker_sessions.STATE_PATH
         histogram_builder.STATE_PATH = os.path.join(self.tmpdir, "histogram.state.json")
         ckpool_native_stats.NETWORK_DIFF_STATE_PATH = os.path.join(self.tmpdir, "network_diff.state.json")
+        worker_sessions.STATE_PATH = os.path.join(self.tmpdir, "worker_sessions.state.json")
 
     def tearDown(self):
         histogram_builder.STATE_PATH = self._orig_histogram_state_path
         ckpool_native_stats.NETWORK_DIFF_STATE_PATH = self._orig_network_diff_state_path
+        worker_sessions.STATE_PATH = self._orig_worker_sessions_state_path
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def write_sharelog(self, name, lines):
@@ -597,13 +604,13 @@ class TestLiveTicker(TempLogDirMixin, unittest.TestCase):
 # 7b. Phase E Milestone 28: native CKPool hashrate merge
 # ---------------------------------------------------------------------------
 class TestNativeHashrateMerge(TempLogDirMixin, unittest.TestCase):
-    def test_schema_version_bumped_to_1_4(self):
-        # Milestone 30 bumped schema_version again (1.3 -> 1.4) for the
-        # additive block_progress field; this test's own subject (native
+    def test_schema_version_bumped_to_1_5(self):
+        # Milestone 31 bumped schema_version again (1.4 -> 1.5) for the
+        # additive worker session fields; this test's own subject (native
         # hashrate merge) is unaffected.
         now = datetime(2026, 7, 16, tzinfo=timezone.utc)
         data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
-        self.assertEqual(data["metadata"]["schema_version"], "1.4")
+        self.assertEqual(data["metadata"]["schema_version"], "1.5")
 
     def test_pool_hashrate_merged_from_pool_status(self):
         now = datetime(2026, 7, 16, tzinfo=timezone.utc)
@@ -746,6 +753,84 @@ class TestBlockProgressMerge(TempLogDirMixin, unittest.TestCase):
             make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp())), sdiff=500.0),
         ])
         self.write_network_diff_log(126_000_000_000_000.0)
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        json.dumps(data)  # must serialize cleanly
+
+
+# ---------------------------------------------------------------------------
+# 7c. Phase E Milestone 31: Worker Session Accepted/Rejected Counts merge
+# ---------------------------------------------------------------------------
+class TestWorkerSessionsMerge(TempLogDirMixin, unittest.TestCase):
+    def test_worker_gets_session_fields_from_its_own_current_connection(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", enonce1="X", clientid=7,
+                       result=True, createdate=cd(int(now.timestamp()) - 100)),
+            make_share(username="alice", workername="alice.rig1", enonce1="X", clientid=7,
+                       result=False, createdate=cd(int(now.timestamp()) - 50)),
+        ])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        worker = data["workers"]["alice.rig1"]
+        self.assertEqual(worker["session_accepted_count"], 1)
+        self.assertEqual(worker["session_rejected_count"], 1)
+        self.assertIsNotNone(worker["session_started_at"])
+
+    def test_recycled_clientid_across_a_genuine_reconnect_is_a_new_session_end_to_end(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(workername="alice.rig1", enonce1="X", clientid=7, createdate=cd(1700000000)),
+            make_share(workername="alice.rig1", enonce1="Y", clientid=49, createdate=cd(1700001000)),
+            make_share(workername="alice.rig1", enonce1="Z", clientid=7, createdate=cd(1700002000)),
+        ])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        worker = data["workers"]["alice.rig1"]
+        self.assertEqual(worker["session_accepted_count"], 1)
+        self.assertEqual(
+            worker["session_started_at"],
+            datetime.fromtimestamp(1700002000, tz=timezone.utc).isoformat(),
+        )
+
+    def test_pool_and_user_scopes_do_not_get_session_fields_worker_only_per_approved_scope(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp()))),
+        ])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertNotIn("session_accepted_count", data["pool"])
+        self.assertNotIn("session_accepted_count", data["users"]["alice"])
+        self.assertIn("session_accepted_count", data["workers"]["alice.rig1"])
+
+    def test_every_worker_always_has_well_formed_session_fields_even_with_no_valid_session_data(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        # A worker record can exist (from analytics_state.py's own sharelog
+        # processing) with no valid enonce1 anywhere -- worker_sessions.py
+        # must still contribute a well-formed fallback, never a missing key.
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", enonce1=None, createdate=cd(int(now.timestamp()))),
+        ])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        worker = data["workers"]["alice.rig1"]
+        self.assertEqual(worker["session_accepted_count"], 0)
+        self.assertEqual(worker["session_rejected_count"], 0)
+        self.assertIsNone(worker["session_started_at"])
+
+    def test_two_different_workers_get_independent_sessions_no_cross_contamination(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", enonce1="A1", result=True, createdate=cd(int(now.timestamp()) - 100)),
+            make_share(username="alice", workername="alice.rig2", enonce1="A2", result=False, createdate=cd(int(now.timestamp()) - 100)),
+        ])
+        data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
+        self.assertEqual(data["workers"]["alice.rig1"]["session_accepted_count"], 1)
+        self.assertEqual(data["workers"]["alice.rig1"]["session_rejected_count"], 0)
+        self.assertEqual(data["workers"]["alice.rig2"]["session_accepted_count"], 0)
+        self.assertEqual(data["workers"]["alice.rig2"]["session_rejected_count"], 1)
+
+    def test_full_output_still_json_serializable_with_session_fields_present(self):
+        now = datetime(2026, 7, 16, tzinfo=timezone.utc)
+        self.write_share_lines("a.sharelog", [
+            make_share(username="alice", workername="alice.rig1", createdate=cd(int(now.timestamp()))),
+        ])
         data = ab.build_analytics(logs_dir=self.tmpdir, now=now, state_path=self.state_path)
         json.dumps(data)  # must serialize cleanly
 
