@@ -49,7 +49,15 @@ export function readThemeTokens(root = document.documentElement) {
     textPrimary: read("--color-text-primary"),
     textSecondary: read("--color-text-secondary"),
     border: read("--color-border"),
-    accent: read("--color-accent"),
+    // --color-accent-text, not the bare fill value: Phase F verified the
+    // bare --color-accent value fails 3:1 non-text contrast on light
+    // theme (1.32:1/1.40:1 against --color-bg/--color-surface -- see
+    // docs/DESIGN_SYSTEM.md Section 13), the same failure already fixed
+    // for border/outline use. -text already clears the stricter 4.5:1
+    // text threshold on light theme, so it clears 3:1 too, and is
+    // identical to the bare value on dark theme, so chart line/marker
+    // colours are unaffected there.
+    accent: read("--color-accent-text"),
     fontFamily: read("--font-family-base"),
   };
 }

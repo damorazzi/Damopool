@@ -695,18 +695,21 @@ computed rather than assumed:
   `shell.css`'s active-nav underline — the only three places
   `--color-accent` was used as a border/outline in shipped CSS.
 
-  **Known, deliberately not fixed here (Code Reviewer finding, Phase F):**
-  `charts/theme-echarts.js` still reads the bare `--color-accent` token
-  for chart line/marker colours (e.g. the histogram chart's dashed
-  "current" line and item markers), which carries the identical
-  light-theme contrast failure this fix addresses for border/outline use.
-  WCAG 1.4.11 can extend to graphical objects required to understand
-  content, not just borders, so this is a real, plausible gap — but it
-  is a chart-rendering concern in an already-shipped file
-  (`theme-echarts.js`), genuinely outside this milestone's investigated
-  and approved scope (border/outline contrast specifically), not a cheap
-  same-file fix. Tracked as its own future closeout item rather than
-  fixed under scope creep or silently left undocumented.
+  **Resolved, Phase F (follow-up closeout).** `charts/theme-echarts.js`'s
+  `readThemeTokens()` read the bare `--color-accent` token for chart
+  line/marker colours (e.g. the histogram chart's dashed "current" line
+  and item markers, and the Pool/History percentile charts) — the
+  identical light-theme contrast failure fixed above for border/outline
+  use (1.32:1 against `--color-bg`, 1.40:1 against `--color-surface`,
+  both failing 3:1). Fixed with a single one-line change: `accent` now
+  reads `--color-accent-text` instead, which clears the stricter 4.5:1
+  text threshold on light theme (4.64:1/4.92:1) and is byte-identical to
+  the bare value on dark theme, so no chart's dark-theme appearance
+  changed. Because every chart-colour consumer (`pages/history.js`,
+  `pages/pool.js`, `charts/histogram-chart.js`) reads this one value
+  through `theme-echarts.js` rather than the CSS token directly, the fix
+  required touching only that single file — no chart page module needed
+  a change.
 - **Colour-blindness simulation of the chart palette** (Section 4.4's
   open item): **passed** — series 3/coral and series 4/orange retain
   79-97% of their original distinguishability under simulated
